@@ -1,0 +1,4 @@
+requests>=2.28.0
+PyYAML>=6.0
+pydantic>=2.0.0
+cyclopts>=2.0.0

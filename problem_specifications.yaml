@@ -1,0 +1,10 @@
+- name: test
+  dataset_name: nepal_evaluation_set
+  backtest_settings:
+    prediction_length: 3
+    n_periods: 2
+    stride: 1
+  metrics:
+    - CRPS
+    - SMAPE
+    - MASE

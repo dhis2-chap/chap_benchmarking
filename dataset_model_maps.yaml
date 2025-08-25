@@ -1,0 +1,4 @@
+global_models:
+  - 'torch-deep:debug'
+specific_models:
+  - 'chtorch:medium'
