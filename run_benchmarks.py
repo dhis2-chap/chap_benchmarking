@@ -10,8 +10,9 @@ This script runs benchmarks for given models by:
 
 Assumes CHAP core server is running on localhost.
 """
-
+import csv
 import argparse
+import datetime
 import logging
 import pydantic
 import sys
@@ -22,6 +23,10 @@ import requests
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import time
+import pandas
+import altair as alt
+alt.renderers.enable('browser')
+LOG_FILENAME = 'logged_runs.csv'
 
 logging.basicConfig(level=logging.INFO, )
 
@@ -36,7 +41,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class DataSetModelMapping(pydantic.BaseModel):x
+class DataSetModelMapping(pydantic.BaseModel):
     dataset_name: str
     model_slug: str
 
@@ -52,6 +57,14 @@ class ProblemSpec(pydantic.BaseModel):
     dataset_name: str
     backtest_settings: BackTestSetting
     metrics: list[str]
+
+class LoggedRun(pydantic.BaseModel):
+    timestamp: datetime.datetime
+    backtest_id: int
+    model_slug: str
+    problem_spec_name: str
+    chap_version: str = ''
+    model_commit_hash: str = ''
 
 
 class ChapAPIClient:
@@ -125,6 +138,7 @@ class ChapAPIClient:
         backtest = self.get('backtests', db_id)
         print(backtest.keys())
         print(backtest['aggregateMetrics'])
+        return job_id
 
 
     def get_job_status(self, job_id: str) -> Optional[str]:
@@ -186,66 +200,42 @@ class BenchmarkRunner:
         self.problem_config_file = Path(problem_config_file)
         self.api_client = ChapAPIClient()
 
-    def run_from_mapping(self, config_filename, template_name, problem_specs):
+    def run_from_mapping(self, config_filename, template_name, problem_specs) -> ProblemSpec:
         config = yaml.safe_load(open(config_filename, 'r'))
         global_models = config.get('global_models', [])
         global_models = [m for m in global_models if m.startswith(template_name)]
         configured_models = self.api_client.list_entries('configured-models')
+        print([model['name'] for model in configured_models],
+                global_models)
         model_mapping = {model['name']: model for model in configured_models if model['name'] in global_models}
         data_sets = self.api_client.get_datasets()
         print(data_sets)
+        logged_runs = []
         for problem_spec in problem_specs:
+            logger.info(f"Processing problem spec: {problem_spec.name}")
             dataset_name = problem_spec.dataset_name
             dataset = next((ds for ds in data_sets if ds['name'] == dataset_name), None)
             if not dataset:
                 raise ValueError(f"Dataset {dataset_name} not found in CHAP datasets: {[ds['name'] for ds in data_sets]}")
             logger.info(f"Running benchmarks for dataset: {dataset_name}")
             for model_name, models_conf in model_mapping.items():
+                logger.info(f"    Running benchmark for model: {model_name}")
                 settings_dict = {'stride': problem_spec.backtest_settings.stride,
                                  'nSplits': problem_spec.backtest_settings.n_periods,
                                  'nPeriods': problem_spec.backtest_settings.prediction_length}
                 job_id = self.api_client.create_backtest(
                     settings_dict | {'modelId': model_name, 'datasetId': dataset['id'],
                                      'name': f"{model_name}_{dataset_name}_benchmark"})
+                assert job_id is not None
                 self.api_client.wait_for_job_completion(job_id)
-
-    def git_pull_model(self, model_slug: str) -> bool:
-        """Git pull the model repository"""
-        model_path = self.models_dir / model_slug
-
-        if not model_path.exists():
-            logger.error(f"Model directory {model_path} does not exist")
-            return False
-
-        try:
-            # Check if it's a git repository
-            git_dir = model_path / ".git"
-            if not git_dir.exists():
-                logger.warning(f"No git repository found in {model_path}")
-                return True  # Not a git repo, but continue
-
-            # Perform git pull
-            result = subprocess.run(
-                ["git", "pull"],
-                cwd=model_path,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Successfully pulled {model_slug}")
-                return True
-            else:
-                logger.error(f"Git pull failed for {model_slug}: {result.stderr}")
-                return False
-
-        except subprocess.TimeoutExpired:
-            logger.error(f"Git pull timeout for {model_slug}")
-            return False
-        except Exception as e:
-            logger.error(f"Error pulling {model_slug}: {e}")
-            return False
+                backtest_id = self.api_client.get_db_id(job_id)
+                logged_runs.append(
+                    LoggedRun(timestamp=datetime.datetime.now(),
+                    backtest_id=backtest_id,
+                    model_slug=model_name,
+                    model_commit_hash='',
+                    problem_spec_name=problem_spec.name))
+            return logged_runs
 
     def discover_model_configs(self, model_slug: str) -> List[Dict]:
         """Discover model configurations in the model directory"""
@@ -411,9 +401,40 @@ class BenchmarkRunner:
 
         return overall_success
 
+    def plot_logs(self, log_entries: list[LoggedRun]):
+        full_entries = []
+        for entry in log_entries:
+            db_entry = self.api_client.get('backtests', entry.backtest_id)
+            metrics = db_entry['aggregateMetrics']
+            for metric_name, value in metrics.items():
+                full_entries.append(entry.model_dump() | {'metric_name': metric_name, 'metric_value': value})
+        df = pandas.DataFrame(full_entries)
+        print(df)
+        metrics = sorted(df['metric_name'].unique().tolist())
+        dropdown = alt.binding_select(options=metrics, name='Metric: ')
+        met = alt.param('met', bind=dropdown, value=metrics[0])
+
+        chart = alt.Chart(df).mark_point().encode(
+            x='timestamp',
+            y='metric_value',
+            color='model_slug',
+        ).add_params(met).transform_filter(alt.datum.metric_name == met)
+        chart.show()
+
+
+
+def test_plot_logfile():
+    runner = BenchmarkRunner(models_dir="test_models",
+                             problem_config_file="test_problem_config_mapping.yaml")
+    with open(LOG_FILENAME, 'r') as f:
+        reader = csv.DictReader(f)
+        log_entries = [LoggedRun(**row) for row in reader]
+    runner.plot_logs(log_entries)
+
+
+
 
 def test_benchmark_runner():
-    print('HERE')
     runner = BenchmarkRunner(models_dir="test_models",
                              problem_config_file="test_problem_config_mapping.yaml")
 
@@ -423,8 +444,16 @@ def test_benchmark_runner():
     T = List[ProblemSpec]
     problem_specs = parse_yaml(file_name, T)
     print(problem_specs)
-    runner.run_from_mapping('dataset_model_maps.yaml', 'torch-deep', problem_specs)
-    assert False
+    logged_runs = runner.run_from_mapping('dataset_model_maps.yaml', 'naive_model', problem_specs)
+    out_file = LOG_FILENAME
+    with open(out_file, 'a') as f:
+        #f.write("timestamp,backtest_id,model_slug,problem_spec_name,chap_version,model_commit_hash\n")
+        for run in logged_runs:
+            f.write(f"{run.timestamp},{run.backtest_id},{run.model_slug},{run.problem_spec_name},"
+                    f"{run.chap_version},{run.model_commit_hash}\n")
+
+
+    assert False, logged_runs
 
 
 def parse_yaml(file_name, data_type):
