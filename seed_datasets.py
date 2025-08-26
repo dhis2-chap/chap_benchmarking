@@ -203,10 +203,6 @@ def seed(seeding_yaml_filename: str):
         else:
             logger.error(f"Failed to seed dataset '{name}' from {file_path}")
 
-@app.command
-def seed_configs():
-
-
 
 if __name__ == "__main__":
     app()
