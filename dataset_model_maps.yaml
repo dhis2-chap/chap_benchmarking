@@ -1,5 +1,5 @@
 global_models:
   - 'naive_model'
-  #- 'torch-deep:debug'
+  - 'torch-deep:debug'
 specific_models:
   - 'chtorch:medium'

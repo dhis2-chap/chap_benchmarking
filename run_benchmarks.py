@@ -203,7 +203,8 @@ class BenchmarkRunner:
     def run_from_mapping(self, config_filename, template_name, problem_specs) -> ProblemSpec:
         config = yaml.safe_load(open(config_filename, 'r'))
         global_models = config.get('global_models', [])
-        global_models = [m for m in global_models if m.startswith(template_name)]
+        if template_name:
+            global_models = [m for m in global_models if m.startswith(template_name)]
         configured_models = self.api_client.list_entries('configured-models')
         print([model['name'] for model in configured_models],
                 global_models)
@@ -414,13 +415,16 @@ class BenchmarkRunner:
         dropdown = alt.binding_select(options=metrics, name='Metric: ')
         met = alt.param('met', bind=dropdown, value=metrics[0])
 
-        chart = alt.Chart(df).mark_point().encode(
+        problems = sorted(df['problem_spec_name'].unique().tolist())
+        dropdown = alt.binding_select(options=problems, name='Problem: ')
+        prob = alt.param('prob', bind=dropdown, value=problems[0])
+
+        chart = alt.Chart(df).mark_line(interpolate='step-before').encode(
             x='timestamp',
             y='metric_value',
             color='model_slug',
-        ).add_params(met).transform_filter(alt.datum.metric_name == met)
+        ).add_params(met).add_params(prob).transform_filter(alt.datum.metric_name == met).transform_filter(alt.datum.problem_spec_name == prob)
         chart.show()
-
 
 
 def test_plot_logfile():
@@ -444,7 +448,7 @@ def test_benchmark_runner():
     T = List[ProblemSpec]
     problem_specs = parse_yaml(file_name, T)
     print(problem_specs)
-    logged_runs = runner.run_from_mapping('dataset_model_maps.yaml', 'naive_model', problem_specs)
+    logged_runs = runner.run_from_mapping('dataset_model_maps.yaml', template_name=None, problem_specs=problem_specs)
     out_file = LOG_FILENAME
     with open(out_file, 'a') as f:
         #f.write("timestamp,backtest_id,model_slug,problem_spec_name,chap_version,model_commit_hash\n")
