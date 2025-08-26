@@ -16,7 +16,7 @@ import datetime
 import logging
 import pydantic
 import sys
-import subprocess
+import cyclopts
 import glob
 import yaml
 import requests
@@ -60,9 +60,11 @@ class ProblemSpec(pydantic.BaseModel):
 
 class LoggedRun(pydantic.BaseModel):
     timestamp: datetime.datetime
-    backtest_id: int
+    backtest_id: int #TODO: Add all metrics
     model_slug: str
     problem_spec_name: str
+    metric_name: str
+    metric_value: float
     chap_version: str = ''
     model_commit_hash: str = ''
 
@@ -136,8 +138,6 @@ class ChapAPIClient:
         job_id =  result.get('id')
         db_id = self.wait_for_job_completion(job_id, timeout=3600)  # Wait for the job to complete
         backtest = self.get('backtests', db_id)
-        print(backtest.keys())
-        print(backtest['aggregateMetrics'])
         return job_id
 
 
@@ -206,11 +206,8 @@ class BenchmarkRunner:
         if template_name:
             global_models = [m for m in global_models if m.startswith(template_name)]
         configured_models = self.api_client.list_entries('configured-models')
-        print([model['name'] for model in configured_models],
-                global_models)
         model_mapping = {model['name']: model for model in configured_models if model['name'] in global_models}
         data_sets = self.api_client.get_datasets()
-        print(data_sets)
         logged_runs = []
         for problem_spec in problem_specs:
             logger.info(f"Processing problem spec: {problem_spec.name}")
@@ -230,12 +227,16 @@ class BenchmarkRunner:
                 assert job_id is not None
                 self.api_client.wait_for_job_completion(job_id)
                 backtest_id = self.api_client.get_db_id(job_id)
-                logged_runs.append(
-                    LoggedRun(timestamp=datetime.datetime.now(),
-                    backtest_id=backtest_id,
-                    model_slug=model_name,
-                    model_commit_hash='',
-                    problem_spec_name=problem_spec.name))
+                backtest = self.api_client.get('backtests', backtest_id)
+                for metric_name, metric_value in backtest['aggregateMetrics'].items():
+                    logged_runs.append(
+                        LoggedRun(timestamp=datetime.datetime.now(),
+                        backtest_id=backtest_id,
+                        model_slug=model_name,
+                        model_commit_hash='',
+                        problem_spec_name=problem_spec.name,
+                        metric_name=metric_name,
+                        metric_value=metric_value))
             return logged_runs
 
     def discover_model_configs(self, model_slug: str) -> List[Dict]:
@@ -403,14 +404,13 @@ class BenchmarkRunner:
         return overall_success
 
     def plot_logs(self, log_entries: list[LoggedRun]):
-        full_entries = []
-        for entry in log_entries:
-            db_entry = self.api_client.get('backtests', entry.backtest_id)
-            metrics = db_entry['aggregateMetrics']
-            for metric_name, value in metrics.items():
-                full_entries.append(entry.model_dump() | {'metric_name': metric_name, 'metric_value': value})
+        full_entries = [e.model_dump() for e in log_entries]
+        # for entry in log_entries:
+        #     db_entry = self.api_client.get('backtests', entry.backtest_id)
+        #     metrics = db_entry['aggregateMetrics']
+        #     for metric_name, value in metrics.items():
+        #         full_entries.append(entry.model_dump() | {'metric_name': metric_name, 'metric_value': value})
         df = pandas.DataFrame(full_entries)
-        print(df)
         metrics = sorted(df['metric_name'].unique().tolist())
         dropdown = alt.binding_select(options=metrics, name='Metric: ')
         met = alt.param('met', bind=dropdown, value=metrics[0])
@@ -428,36 +428,45 @@ class BenchmarkRunner:
 
 
 def test_plot_logfile():
-    runner = BenchmarkRunner(models_dir="test_models",
-                             problem_config_file="test_problem_config_mapping.yaml")
-    with open(LOG_FILENAME, 'r') as f:
-        reader = csv.DictReader(f)
-        log_entries = [LoggedRun(**row) for row in reader]
+    log_filename = LOG_FILENAME
+
+    log_entries = _read_log_entries(log_filename)
+    runner = BenchmarkRunner()
     runner.plot_logs(log_entries)
 
 
+def _read_log_entries(log_filename):
+    logger.info(f"Reading log entries from {log_filename}")
+    with open(log_filename, 'r') as f:
+        reader = csv.DictReader(f)
+        log_entries = [LoggedRun(**row) for row in reader]
+    return log_entries
 
 
 def test_benchmark_runner():
-    runner = BenchmarkRunner(models_dir="test_models",
-                             problem_config_file="test_problem_config_mapping.yaml")
-
-    # assert runner.git_pull_model('chtorch')
-
-    file_name = 'problem_specifications.yaml'
-    T = List[ProblemSpec]
-    problem_specs = parse_yaml(file_name, T)
-    print(problem_specs)
-    logged_runs = runner.run_from_mapping('dataset_model_maps.yaml', template_name=None, problem_specs=problem_specs)
+    problem_spec_filename = 'problem_specifications.yaml'
+    mapping_filename = 'dataset_model_maps.yaml'
     out_file = LOG_FILENAME
-    with open(out_file, 'a') as f:
-        #f.write("timestamp,backtest_id,model_slug,problem_spec_name,chap_version,model_commit_hash\n")
-        for run in logged_runs:
-            f.write(f"{run.timestamp},{run.backtest_id},{run.model_slug},{run.problem_spec_name},"
-                    f"{run.chap_version},{run.model_commit_hash}\n")
-
+    logged_runs = run_benchmarks(mapping_filename, problem_spec_filename, out_file)
 
     assert False, logged_runs
+
+
+def run_benchmarks(mapping_filename, problem_spec_filename, out_file):
+    runner = BenchmarkRunner()
+    T = List[ProblemSpec]
+    problem_specs = parse_yaml(problem_spec_filename, T)
+    logged_runs = runner.run_from_mapping(mapping_filename, template_name=None, problem_specs=problem_specs)
+    if not Path(out_file).exists():
+        header = ','.join(LoggedRun.model_fields.keys())
+        with open(out_file, 'w') as f:
+            f.write(f'{header}\n')
+    with open(out_file, 'a') as f:
+        for run in logged_runs:
+            line = ','.join(str(getattr(run, field)) for field in LoggedRun.model_fields.keys())
+            f.write(f'{line}\n')
+
+    return logged_runs
 
 
 def parse_yaml(file_name, data_type):
@@ -466,41 +475,19 @@ def parse_yaml(file_name, data_type):
     return problem_specs
 
 
-def main():
+
+def main(config_folder: Path=Path('./example_config/'), log_file: Path=Path('benchmark_log.csv')):
     """Main entry point"""
-    parser = argparse.ArgumentParser(description="Run benchmarks for a given model")
-    parser.add_argument("model_slug", help="Model slug to benchmark")
-    parser.add_argument("--models-dir", default="models", help="Models directory path")
-    parser.add_argument("--problem-config", default="problem_config_mapping.yaml",
-                        help="Problem configuration mapping file")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
+    run_benchmarks(
+        mapping_filename=config_folder / 'dataset_model_maps.yaml',
+        problem_spec_filename=config_folder / 'problem_specifications.yaml',
+        out_file=log_file
+    )
+    log_entries = _read_log_entries(log_file)
+    runner = BenchmarkRunner()
+    runner.plot_logs(log_entries)
 
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-
-    # Validate inputs
-    if not Path(args.models_dir).exists():
-        logger.error(f"Models directory {args.models_dir} does not exist")
-        sys.exit(1)
-
-    model_path = Path(args.models_dir) / args.model_slug
-    if not model_path.exists():
-        logger.error(f"Model directory {model_path} does not exist")
-        sys.exit(1)
-
-    # Run benchmarks
-    runner = BenchmarkRunner(args.models_dir, args.problem_config)
-    success = runner.run_benchmarks_for_model(args.model_slug)
-
-    if success:
-        logger.info(f"Successfully completed benchmarks for {args.model_slug}")
-        sys.exit(0)
-    else:
-        logger.error(f"Failed to complete benchmarks for {args.model_slug}")
-        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    cyclopts.run(main)

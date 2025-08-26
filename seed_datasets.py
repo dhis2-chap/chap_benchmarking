@@ -26,6 +26,7 @@ import cyclopts
 # Reuse the ChapAPIClient from run_benchmarks
 from run_benchmarks import ChapAPIClient
 
+#TODO: Also seed model configurations from this script
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -201,6 +202,9 @@ def seed(seeding_yaml_filename: str):
             logger.info(f"Successfully seeded dataset '{name}' from {file_path}")
         else:
             logger.error(f"Failed to seed dataset '{name}' from {file_path}")
+
+@app.command
+def seed_configs():
 
 
 
