@@ -98,7 +98,7 @@ class ChapAPIClient:
             if status.lower() in ['completed', 'success']:
                 logger.info(f"Job {job_id} completed successfully")
                 return self.get_db_id(job_id)
-            elif status.lower() in ['failed', 'error']:
+            elif status.lower() in ['failed', 'error', 'failure']:
                 logger.error(f"Job {job_id} failed")
                 raise Exception(f"Job {job_id} failed with status: {status}")
 
