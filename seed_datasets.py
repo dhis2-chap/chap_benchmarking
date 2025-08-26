@@ -92,7 +92,7 @@ class DatasetSeeder:
             if status.lower() in ['completed', 'success']:
                 logger.info(f"Job {job_id} completed successfully")
                 return True
-            elif status.lower() in ['failed', 'error']:
+            elif status.lower() in ['failed', 'error', 'failure']:
                 logger.error(f"Job {job_id} failed")
                 return False
             
