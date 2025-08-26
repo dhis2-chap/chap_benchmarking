@@ -100,6 +100,8 @@ class ChapAPIClient:
                 return self.get_db_id(job_id)
             elif status.lower() in ['failed', 'error', 'failure']:
                 logger.error(f"Job {job_id} failed")
+                logs = self.session.get(f"{self.base_url}/jobs/{job_id}/logs").text
+                print(logs)
                 raise Exception(f"Job {job_id} failed with status: {status}")
 
             logger.info(f"Job {job_id} status: {status}")
@@ -139,7 +141,6 @@ class ChapAPIClient:
         db_id = self.wait_for_job_completion(job_id, timeout=3600)  # Wait for the job to complete
         backtest = self.get('backtests', db_id)
         return job_id
-
 
     def get_job_status(self, job_id: str) -> Optional[str]:
         """Get job status"""
@@ -424,7 +425,10 @@ class BenchmarkRunner:
             y='metric_value',
             color='model_slug',
         ).add_params(met).add_params(prob).transform_filter(alt.datum.metric_name == met).transform_filter(alt.datum.problem_spec_name == prob)
-        chart.show()
+        # save plot to file
+        chart.save('benchmark_plot.html')
+
+        # chart.show()
 
 
 def test_plot_logfile():
