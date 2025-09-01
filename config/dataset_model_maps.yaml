@@ -1,5 +1,6 @@
 global_models:
-  - 'naive_model'
+  # - 'naive_model'
   - 'torch-deep:debug'
+  - 'ewars_template'
 specific_models:
   - 'chtorch:medium'

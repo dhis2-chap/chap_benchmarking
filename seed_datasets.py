@@ -126,9 +126,8 @@ class DatasetSeeder:
 
         # Load and validate basic dataset config
         config = self.load_dataset_config(config_file)
-        config['name']= name
-        print(config['name'])
-        print(config.keys())
+        config['name'] = name
+
         if not self.api_client.health_check():
             logger.error("CHAP server is not running or not accessible")
             return False

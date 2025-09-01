@@ -11,11 +11,9 @@ This script runs benchmarks for given models by:
 Assumes CHAP core server is running on localhost.
 """
 import csv
-import argparse
 import datetime
 import logging
 import pydantic
-import sys
 import cyclopts
 import glob
 import yaml
@@ -238,7 +236,7 @@ class BenchmarkRunner:
                         problem_spec_name=problem_spec.name,
                         metric_name=metric_name,
                         metric_value=metric_value))
-            return logged_runs
+        return logged_runs
 
     def discover_model_configs(self, model_slug: str) -> List[Dict]:
         """Discover model configurations in the model directory"""
@@ -476,6 +474,7 @@ def run_benchmarks(mapping_filename, problem_spec_filename, out_file):
 def parse_yaml(file_name, data_type):
     problem_specs_data = yaml.safe_load(open(file_name, 'r'))  # Load problem specs from YAML file
     problem_specs = pydantic.parse_obj_as(data_type, problem_specs_data)
+    logger.info(f'Found {len(problem_specs)} problem specifications in {file_name}')
     return problem_specs
 
 
@@ -490,7 +489,6 @@ def main(config_folder: Path=Path('./example_config/'), log_file: Path=Path('ben
     log_entries = _read_log_entries(log_file)
     runner = BenchmarkRunner()
     runner.plot_logs(log_entries)
-
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 global_models:
   - 'naive_model'
   - 'torch-deep:debug'
+  #- 'torch-deep:medium'
+  # - 'ewars_template'
 specific_models:
   - 'chtorch:medium'
