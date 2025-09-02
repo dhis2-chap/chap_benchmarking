@@ -1,6 +1,8 @@
 global_models:
-  - 'naive_model'
-  - 'torch-deep:debug'
+  #'rwanda_random_forest:v1'
+  'rwanda_sarimax:v1'
+  #- 'naive_model'
+  #- 'torch-deep:debug'
   #- 'torch-deep:medium'
   # - 'ewars_template'
 specific_models:

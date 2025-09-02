@@ -1,5 +1,5 @@
 - name: test
-  dataset_name: nepal_evaluation_set
+  dataset_name: example_data1
   backtest_settings:
     prediction_length: 3
     n_periods: 2
@@ -8,23 +8,35 @@
     - CRPS
     - SMAPE
     - MASE
-- name: rwanda_test
-  dataset_name: rwanda_evaluation_set
-  backtest_settings:
-    prediction_length: 3
-    n_periods: 2
-    stride: 1
-  metrics:
-    - CRPS
-    - SMAPE
-    - MASE
-- name: laos_test
-  dataset_name: laos_evaluation_set
-  backtest_settings:
-    prediction_length: 12
-    n_periods: 2
-    stride: 1
-  metrics:
-    - CRPS
-    - SMAPE
-    - MASE
+
+
+#- name: test
+#  dataset_name: nepal_evaluation_set
+#  backtest_settings:
+#    prediction_length: 3
+#    n_periods: 2
+#    stride: 1
+#  metrics:
+#    - CRPS
+#    - SMAPE
+#    - MASE
+#- name: rwanda_test
+#  dataset_name: rwanda_evaluation_set
+#  backtest_settings:
+#    prediction_length: 3
+#    n_periods: 2
+#    stride: 1
+#  metrics:
+#    - CRPS
+#    - SMAPE
+#    - MASE
+#- name: laos_test
+#  dataset_name: laos_evaluation_set
+#  backtest_settings:
+#    prediction_length: 12
+#    n_periods: 2
+#    stride: 1
+#  metrics:
+#    - CRPS
+#    - SMAPE
+#    - MASE
