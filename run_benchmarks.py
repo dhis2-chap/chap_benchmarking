@@ -23,6 +23,8 @@ from typing import Dict, List, Optional, Tuple
 import time
 import pandas
 import altair as alt
+
+from github_tools import get_last_commit_hash
 alt.renderers.enable('browser')
 LOG_FILENAME = 'logged_runs.csv'
 
@@ -200,12 +202,8 @@ class BenchmarkRunner:
         self.api_client = ChapAPIClient()
 
     def run_from_mapping(self, config_filename, template_name, problem_specs) -> ProblemSpec:
-        config = yaml.safe_load(open(config_filename, 'r'))
-        global_models = config.get('global_models', [])
-        if template_name:
-            global_models = [m for m in global_models if m.startswith(template_name)]
-        configured_models = self.api_client.list_entries('configured-models')
-        model_mapping = {model['name']: model for model in configured_models if model['name'] in global_models}
+        model_mapping = self.get_models(config_filename, template_name)
+        logger.info("Model mapping: " + str(model_mapping))
         data_sets = self.api_client.get_datasets()
         logged_runs = []
         for problem_spec in problem_specs:
@@ -227,16 +225,28 @@ class BenchmarkRunner:
                 self.api_client.wait_for_job_completion(job_id)
                 backtest_id = self.api_client.get_db_id(job_id)
                 backtest = self.api_client.get('backtests', backtest_id)
+                last_commit_hash = get_last_commit_hash(models_conf['sourceUrl'])
                 for metric_name, metric_value in backtest['aggregateMetrics'].items():
                     logged_runs.append(
                         LoggedRun(timestamp=datetime.datetime.now(),
                         backtest_id=backtest_id,
                         model_slug=model_name,
-                        model_commit_hash='',
+                        model_commit_hash=last_commit_hash,
                         problem_spec_name=problem_spec.name,
                         metric_name=metric_name,
                         metric_value=metric_value))
         return logged_runs
+
+    def get_models(self, config_filename, template_name):
+        config = yaml.safe_load(open(config_filename, 'r'))
+        global_models = config.get('global_models', [])
+        logger.info("Global models from config: " + str(global_models))
+        if template_name:
+            global_models = [m for m in global_models if m.startswith(template_name)]
+        configured_models = self.api_client.list_entries('configured-models')
+        logger.info("Configured models in CHAP: " + str([m['name'] for m in configured_models]))
+        model_mapping = {model['name']: model for model in configured_models if model['name'] in global_models}
+        return model_mapping
 
     def discover_model_configs(self, model_slug: str) -> List[Dict]:
         """Discover model configurations in the model directory"""
@@ -454,11 +464,11 @@ def test_benchmark_runner():
     assert False, logged_runs
 
 
-def run_benchmarks(mapping_filename, problem_spec_filename, out_file):
+def run_benchmarks(mapping_filename, problem_spec_filename, out_file, template_name=None):
     runner = BenchmarkRunner()
     T = List[ProblemSpec]
     problem_specs = parse_yaml(problem_spec_filename, T)
-    logged_runs = runner.run_from_mapping(mapping_filename, template_name=None, problem_specs=problem_specs)
+    logged_runs = runner.run_from_mapping(mapping_filename, template_name=template_name, problem_specs=problem_specs)
     if not Path(out_file).exists():
         header = ','.join(LoggedRun.model_fields.keys())
         with open(out_file, 'w') as f:

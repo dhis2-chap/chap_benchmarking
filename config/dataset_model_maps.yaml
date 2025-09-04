@@ -1,7 +1,7 @@
 global_models:
-  # - 'naive_model'
+  - 'naive_model'
   #- 'torch-deep:debug'
   #- 'ewars_template'
-  - 'rwanda_random_forest:v1'
+  #- 'rwanda_random_forest:v1'
 specific_models:
   - 'chtorch:medium'

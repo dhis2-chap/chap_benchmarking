@@ -1,5 +1,6 @@
 - name: test
-  dataset_name: example_data1
+  #dataset_name: example_data1
+  dataset_name: rwanda_evaluation_set
   backtest_settings:
     prediction_length: 3
     n_periods: 2
