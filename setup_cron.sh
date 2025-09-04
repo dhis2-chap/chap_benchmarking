@@ -3,7 +3,7 @@
 # Setup cronjob for check_updates_and_trigger_run.py
 
 # Define the cron job command
-CRON_CMD="*/5 * * * * cd /data/chap_benchmarking && /data/chap_benchmarking/.venv/bin/python check_updates_and_trigger_run.py >> /data/chap_benchmarking/cron.log 2>&1"
+CRON_CMD="*/1 * * * * cd /data/chap_benchmarking && /data/chap_benchmarking/.venv/bin/python check_updates_and_trigger_run.py >> /data/chap_benchmarking/cron.log 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "check_updates_and_trigger_run.py"; then
