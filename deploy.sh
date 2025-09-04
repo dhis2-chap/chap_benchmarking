@@ -7,6 +7,8 @@ echo "Starting deployment..."
 
 # Pull latest changes from git
 git pull origin main
+source .venv/bin/activate
+pip install -r requirements.txt
 
 # Setup or update cronjob
 echo "Setting up cronjob..."
