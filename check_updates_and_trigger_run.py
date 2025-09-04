@@ -84,6 +84,11 @@ def main(config_folder: Path=Path('./example_config/'), log_file: Path=Path('ben
         
         # Run the main update checking logic
         check_for_updates(config_folder, log_file)
+        log_entries = _read_log_entries(log_file)
+        runner = BenchmarkRunner()
+        runner.plot_logs(log_entries)
+
+
     
     finally:
         # Always remove lock file when done
