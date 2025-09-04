@@ -4,3 +4,4 @@ pydantic>=2.0.0
 cyclopts>=2.0.0
 pandas
 altair
+PyGithub
