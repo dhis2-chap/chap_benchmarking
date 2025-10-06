@@ -36,6 +36,8 @@ problem_config_mapping.yaml
 # Server setup
 This repo is setup to automatically run benchmarks on a server.
 
+Note: On the benchmark server, the config is in /data/chap_benchmarking/local_config/.
+
 Latest results can be found at: [http://158.37.66.207:8080/benchmark_plot.html](http://158.37.66.207:8080/benchmark_plot.html)
 
 Benchmarks are run every 15 minutes and will fetch latest models from github. 
