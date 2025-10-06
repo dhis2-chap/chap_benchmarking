@@ -213,6 +213,7 @@ class BenchmarkRunner:
             if not dataset:
                 raise ValueError(f"Dataset {dataset_name} not found in CHAP datasets: {[ds['name'] for ds in data_sets]}")
             logger.info(f"Running benchmarks for dataset: {dataset_name}")
+            logger.info(f"N splits will be {problem_spec.backtest_settings.n_periods} ")
             for model_name, models_conf in model_mapping.items():
                 logger.info(f"    Running benchmark for model: {model_name}")
                 settings_dict = {'stride': problem_spec.backtest_settings.stride,

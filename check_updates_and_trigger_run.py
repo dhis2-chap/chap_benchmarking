@@ -40,6 +40,7 @@ def check_for_updates(config_folder: Path, log_file: Path):
     df = pandas.DataFrame(full_entries)
     df_latest = df.sort_values('timestamp').groupby('model_slug').tail(1)
 
+    print("Last commits fetched, checking for updates...\n")
     for model_name, last_commit in last_commits.items():
         if last_commit is None:
             print(f"✗ {model_name}: No commit info, skipping")

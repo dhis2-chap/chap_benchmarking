@@ -1,3 +1,4 @@
 #nepal_evaluation_set: '/home/knut/Data/ch_data/nepal_3.json'
-rwanda_evaluation_set: 'example_config/rwanda_benchmark.json'
+#rwanda_evaluation_set: 'example_config/rwanda_benchmark.json'
+rwanda_evaluation_set2: 'example_config/rainfall_pop_temp_cases.json'
 #laos_evaluation_set: '/home/knut/Data/ch_data/laos_humidity.json'

@@ -25,3 +25,25 @@ problem_config_mapping.yaml
 2. Install dependencies: `pip install -r requirements.txt`
 3. Make sure you have the chap platform running locally on port 8000
 4. Run benchmarks by running `python run_benchmarks.py`. This will by default run a single model on a small example_dataset. Edit the config files to change what is being run.
+
+
+## How to seed a dataset
+- Make a dataset seeding file (see example_config/dataset_seeds.yaml).
+- Run `python seed_datasets.py seed --seeding-yaml-filename example_config/dataset_seeds.yaml` (replace the seeding config file to match your file)
+
+
+
+# Server setup
+This repo is setup to automatically run benchmarks on a server.
+
+Latest results can be found at: [http://158.37.66.207:8080/benchmark_plot.html](http://158.37.66.207:8080/benchmark_plot.html)
+
+Benchmarks are run every 15 minutes and will fetch latest models from github. 
+
+To manually trigger a run, log into the server and do:
+
+```bash
+cd /data/chap_benchmarking
+source .venv/bin/activate
+python check_updates_and_trigger_run.py
+```

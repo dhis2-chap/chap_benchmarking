@@ -1,9 +1,9 @@
 - name: test
   #dataset_name: example_data1
-  dataset_name: rwanda_evaluation_set
+  dataset_name: rwanda_evaluation_set2
   backtest_settings:
     prediction_length: 3
-    n_periods: 2
+    n_periods: 12
     stride: 1
   metrics:
     - CRPS
