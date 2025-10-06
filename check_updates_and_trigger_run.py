@@ -59,7 +59,7 @@ def check_for_updates(config_folder: Path, log_file: Path):
                     print(f"✓ {model_name}: No update (last commit {latest_commit})")
 
 
-def main(config_folder: Path=Path('./example_config/'), log_file: Path=Path('benchmark_log.csv')):
+def main(config_folder: Path=Path('./local_config/'), log_file: Path=Path('benchmark_log.csv')):
     """
     Checks for updates to models and reruns benchmarks if needed.
     This function is typically meant to be run from a server often, therefore it is using lock logic to avoid simultaneous runs.
