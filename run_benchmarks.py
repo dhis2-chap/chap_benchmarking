@@ -247,7 +247,6 @@ class BenchmarkRunner:
         model_mapping = self.get_models(config_filename, template_name)
         logger.info("Model mapping: " + str(model_mapping))
         data_sets = self.api_client.get_datasets()
-        print(dataset.keys() for dataset in data_sets)
         logged_runs = []
         for problem_spec in problem_specs:
             logger.info(f"Processing problem spec: {problem_spec.name}")
@@ -456,8 +455,6 @@ class BenchmarkRunner:
 
         return overall_success
 
-
-
 def read_log_entries(log_filename):
     logger.info(f"Reading log entries from {log_filename}")
     with open(log_filename, 'r') as f:
@@ -502,13 +499,8 @@ def parse_yaml(file_name, data_type):
 app = cyclopts.App()
 
 @app.command()
-def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv'), use_time_index: bool = False):
+def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv'), use_time_index: bool = True):
     """Main entry point"""
-    run_benchmarks(
-        mapping_filename=config_folder / 'dataset_model_maps.yaml',
-        problem_spec_filename=config_folder / 'problem_specifications.yaml',
-        out_file=log_file
-    )
     log_entries = read_log_entries(log_file)
     chart = plot_logs(log_entries, use_time_index=use_time_index)
     chart.save('benchmark_plot.html')
