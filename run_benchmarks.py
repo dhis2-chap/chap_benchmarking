@@ -268,7 +268,8 @@ class BenchmarkRunner:
                 self.api_client.wait_for_job_completion(job_id)
                 backtest_id = self.api_client.get_db_id(job_id)
                 backtest = self.api_client.get('backtests', backtest_id)
-                last_commit_hash = get_last_commit_hash(models_conf['sourceUrl'])
+                last_commit_hash = '-' # get_last_commit_hash(models_conf['sourceUrl']) TODO: figure out the rate limiting on github api
+
                 for metric_name, metric_value in backtest['aggregateMetrics'].items():
                     logged_runs.append(
                         LoggedRun(timestamp=datetime.datetime.now(),
