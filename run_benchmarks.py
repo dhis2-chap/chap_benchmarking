@@ -12,6 +12,7 @@ Assumes CHAP core server is running on localhost.
 """
 import csv
 import datetime
+import json
 import logging
 import pydantic
 import cyclopts
@@ -234,6 +235,11 @@ def plot_logs(log_entries: list[LoggedRun], use_time_index: bool = False):
     return chart
 
 
+def get_dataset(data_sets: list[dict], dataset_name: str) -> Optional[dict]:
+    dataset = next((ds for ds in data_sets if ds['name'] == dataset_name), None)
+    assert dataset is not None, f"Failed to get dataset {dataset_name} - {dataset}"
+    return dataset
+
 
 class BenchmarkRunner:
     """Main benchmark runner class"""
@@ -251,7 +257,7 @@ class BenchmarkRunner:
         for problem_spec in problem_specs:
             logger.info(f"Processing problem spec: {problem_spec.name}")
             dataset_name = problem_spec.dataset_name
-            dataset = next((ds for ds in data_sets if ds['name'] == dataset_name), None)
+            dataset = get_dataset(data_sets, dataset_name)
             if not dataset:
                 raise ValueError(f"Dataset {dataset_name} not found in CHAP datasets: {[ds['name'] for ds in data_sets]}")
             logger.info(f"Running benchmarks for dataset: {dataset_name}")
@@ -498,6 +504,41 @@ def parse_yaml(file_name, data_type):
 
 
 app = cyclopts.App()
+
+def wrap_vega_spec(vega_spec) -> str:
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    </head>
+    <body>
+        <div id="vis"></div>
+        <script type="text/javascript">
+            vegaEmbed('#vis', {json.dumps(vega_spec)});
+        </script>
+    </body>
+    </html>
+    """
+    return html_template
+
+
+@app.command()
+def plot_datasets(config_folder: Path=Path('./config/'), out_folder: Path=Path('./plots/')):
+    problem_spec_filename = config_folder/'problem_specifications.yaml'
+    problem_specs = parse_yaml(problem_spec_filename, List[ProblemSpec])
+    dataset_names = set(ps.dataset_name for ps in problem_specs)
+    api_client = ChapAPIClient()
+    datasets = api_client.get_datasets()
+    logger.info(f'Found {len(datasets)} datsets in CHAP: {[d["name"] for d in datasets]}')
+    for dataset_name in dataset_names:
+        logger.info(f'Processing dataset: {dataset_name}')
+        dataset = get_dataset(datasets, dataset_name)
+        json_spec = api_client.session.get(f"{CHAP_API_BASE}/dataset-plots/standardized-feature/{dataset['id']}").json()
+        with open(out_folder/(dataset_name+'.html'), 'w') as f:
+            f.write(wrap_vega_spec(json_spec))
+
 
 @app.command()
 def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv'), use_time_index: bool = True):
