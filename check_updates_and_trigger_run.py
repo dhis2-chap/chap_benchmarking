@@ -86,8 +86,9 @@ def main(config_folder: Path=Path('./local_config/'), log_file: Path=Path('bench
         # Run the main update checking logic
         check_for_updates(config_folder, log_file)
         log_entries = read_log_entries(log_file)
-        chart = plot_logs(log_entries)
-        chart.save('benchmark_plot.html')
+        plot_logs(log_entries).save('benchmark_plot_timestamp.html')
+        plot_logs(log_entries, use_time_index=True).save('benchmark_plot.html')
+
     finally:
         # Always remove lock file when done
         if lock_file.exists():

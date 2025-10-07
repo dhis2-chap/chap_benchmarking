@@ -192,9 +192,32 @@ class ChapAPIClient:
         return response.json().get('id')
 
 
-def plot_logs(log_entries: list[LoggedRun]):
+def plot_logs(log_entries: list[LoggedRun], use_time_index: bool = False):
     full_entries = [e.model_dump() for e in log_entries]
     df = pandas.DataFrame(full_entries)
+
+    # Add time index for each model/problem/metric combination
+    df = df.sort_values('timestamp')
+    df['time_index'] = df.groupby(['model_slug', 'problem_spec_name', 'metric_name']).cumcount()
+
+    # Extend each line to the end of the plot
+    if use_time_index:
+        max_value = df['time_index'].max()
+        x_field = 'time_index'
+    else:
+        max_value = df['timestamp'].max()
+        x_field = 'timestamp'
+
+    extended_rows = []
+    for (model, problem, metric), group in df.groupby(['model_slug', 'problem_spec_name', 'metric_name']):
+        last_row = group.loc[group[x_field].idxmax()].copy()
+        if last_row[x_field] < max_value:
+            last_row[x_field] = max_value
+            extended_rows.append(last_row)
+
+    if extended_rows:
+        df = pandas.concat([df, pandas.DataFrame(extended_rows)], ignore_index=True)
+
     metrics = sorted(df['metric_name'].unique().tolist())
     dropdown = alt.binding_select(options=metrics, name='Metric: ')
     met = alt.param('met', bind=dropdown, value=metrics[0])
@@ -203,8 +226,8 @@ def plot_logs(log_entries: list[LoggedRun]):
     dropdown = alt.binding_select(options=problems, name='Problem: ')
     prob = alt.param('prob', bind=dropdown, value=problems[0])
 
-    chart = alt.Chart(df).mark_line(interpolate='step-before').encode(
-        x='timestamp',
+    chart = alt.Chart(df).mark_line(interpolate='step-after').encode(
+        x=x_field,
         y='metric_value',
         color='model_slug',
     ).add_params(met).add_params(prob).transform_filter(alt.datum.metric_name == met).transform_filter(alt.datum.problem_spec_name == prob)
@@ -479,7 +502,7 @@ def parse_yaml(file_name, data_type):
 app = cyclopts.App()
 
 @app.command()
-def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv')):
+def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv'), use_time_index: bool = False):
     """Main entry point"""
     run_benchmarks(
         mapping_filename=config_folder / 'dataset_model_maps.yaml',
@@ -487,7 +510,7 @@ def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_l
         out_file=log_file
     )
     log_entries = read_log_entries(log_file)
-    chart = plot_logs(log_entries)
+    chart = plot_logs(log_entries, use_time_index=use_time_index)
     chart.save('benchmark_plot.html')
 
 @app.command()
