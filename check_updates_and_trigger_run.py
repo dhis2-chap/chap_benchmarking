@@ -6,7 +6,7 @@ If any is updated, trigger a benchmark run with that model.
 
 from pathlib import Path
 from github_tools import get_last_commit_hash
-from run_benchmarks import BenchmarkRunner, _read_log_entries, run_benchmarks
+from run_benchmarks import BenchmarkRunner, read_log_entries, run_benchmarks, plot_logs
 import pandas
 import cyclopts
 import os
@@ -35,7 +35,7 @@ def check_for_updates(config_folder: Path, log_file: Path):
         except Exception as e:
             print(f"✗ {model_name}: Failed - {e}")
 
-    log_entries = _read_log_entries(log_file)
+    log_entries = read_log_entries(log_file)
     full_entries = [e.model_dump() for e in log_entries]
     df = pandas.DataFrame(full_entries)
     df_latest = df.sort_values('timestamp').groupby('model_slug').tail(1)
@@ -85,12 +85,9 @@ def main(config_folder: Path=Path('./local_config/'), log_file: Path=Path('bench
         
         # Run the main update checking logic
         check_for_updates(config_folder, log_file)
-        log_entries = _read_log_entries(log_file)
-        runner = BenchmarkRunner()
-        runner.plot_logs(log_entries)
-
-
-    
+        log_entries = read_log_entries(log_file)
+        chart = plot_logs(log_entries)
+        chart.save('benchmark_plot.html')
     finally:
         # Always remove lock file when done
         if lock_file.exists():

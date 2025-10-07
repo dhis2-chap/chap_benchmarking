@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chap-benchmarking"
+version = "0.1.0"
+description = "Performance tracking for CHAP models over time on fixed datasets"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.28.0",
+    "PyYAML>=6.0",
+    "pydantic>=2.0.0",
+    "cyclopts>=2.0.0",
+    "pandas>=2.0.0",
+    "altair>=5.0.0",
+    "PyGithub>=2.0.0",
+]
+
+[project.scripts]
+run-benchmarks = "run_benchmarks:main"
+seed-datasets = "seed_datasets:main"
+check-updates = "check_updates_and_trigger_run:main"
+
+[tool.setuptools]
+py-modules = [
+    "run_benchmarks",
+    "seed_datasets",
+    "check_updates_and_trigger_run",
+    "github_tools",
+    "serve_html_only",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

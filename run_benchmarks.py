@@ -192,6 +192,25 @@ class ChapAPIClient:
         return response.json().get('id')
 
 
+def plot_logs(log_entries: list[LoggedRun]):
+    full_entries = [e.model_dump() for e in log_entries]
+    df = pandas.DataFrame(full_entries)
+    metrics = sorted(df['metric_name'].unique().tolist())
+    dropdown = alt.binding_select(options=metrics, name='Metric: ')
+    met = alt.param('met', bind=dropdown, value=metrics[0])
+
+    problems = sorted(df['problem_spec_name'].unique().tolist())
+    dropdown = alt.binding_select(options=problems, name='Problem: ')
+    prob = alt.param('prob', bind=dropdown, value=problems[0])
+
+    chart = alt.Chart(df).mark_line(interpolate='step-before').encode(
+        x='timestamp',
+        y='metric_value',
+        color='model_slug',
+    ).add_params(met).add_params(prob).transform_filter(alt.datum.metric_name == met).transform_filter(alt.datum.problem_spec_name == prob)
+    return chart
+
+
 
 class BenchmarkRunner:
     """Main benchmark runner class"""
@@ -205,6 +224,7 @@ class BenchmarkRunner:
         model_mapping = self.get_models(config_filename, template_name)
         logger.info("Model mapping: " + str(model_mapping))
         data_sets = self.api_client.get_datasets()
+        print(dataset.keys() for dataset in data_sets)
         logged_runs = []
         for problem_spec in problem_specs:
             logger.info(f"Processing problem spec: {problem_spec.name}")
@@ -413,42 +433,9 @@ class BenchmarkRunner:
 
         return overall_success
 
-    def plot_logs(self, log_entries: list[LoggedRun]):
-        full_entries = [e.model_dump() for e in log_entries]
-        # for entry in log_entries:
-        #     db_entry = self.api_client.get('backtests', entry.backtest_id)
-        #     metrics = db_entry['aggregateMetrics']
-        #     for metric_name, value in metrics.items():
-        #         full_entries.append(entry.model_dump() | {'metric_name': metric_name, 'metric_value': value})
-        df = pandas.DataFrame(full_entries)
-        metrics = sorted(df['metric_name'].unique().tolist())
-        dropdown = alt.binding_select(options=metrics, name='Metric: ')
-        met = alt.param('met', bind=dropdown, value=metrics[0])
-
-        problems = sorted(df['problem_spec_name'].unique().tolist())
-        dropdown = alt.binding_select(options=problems, name='Problem: ')
-        prob = alt.param('prob', bind=dropdown, value=problems[0])
-
-        chart = alt.Chart(df).mark_line(interpolate='step-before').encode(
-            x='timestamp',
-            y='metric_value',
-            color='model_slug',
-        ).add_params(met).add_params(prob).transform_filter(alt.datum.metric_name == met).transform_filter(alt.datum.problem_spec_name == prob)
-        # save plot to file
-        chart.save('benchmark_plot.html')
-
-        # chart.show()
 
 
-def test_plot_logfile():
-    log_filename = LOG_FILENAME
-
-    log_entries = _read_log_entries(log_filename)
-    runner = BenchmarkRunner()
-    runner.plot_logs(log_entries)
-
-
-def _read_log_entries(log_filename):
+def read_log_entries(log_filename):
     logger.info(f"Reading log entries from {log_filename}")
     with open(log_filename, 'r') as f:
         reader = csv.DictReader(f)
@@ -489,18 +476,29 @@ def parse_yaml(file_name, data_type):
     return problem_specs
 
 
+app = cyclopts.App()
 
-def main(config_folder: Path=Path('./example_config/'), log_file: Path=Path('benchmark_log.csv')):
+@app.command()
+def plot(config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv')):
     """Main entry point"""
     run_benchmarks(
         mapping_filename=config_folder / 'dataset_model_maps.yaml',
         problem_spec_filename=config_folder / 'problem_specifications.yaml',
         out_file=log_file
     )
-    log_entries = _read_log_entries(log_file)
-    runner = BenchmarkRunner()
-    runner.plot_logs(log_entries)
+    log_entries = read_log_entries(log_file)
+    chart = plot_logs(log_entries)
+    chart.save('benchmark_plot.html')
 
+@app.command()
+def run(template_name: Optional[str], config_folder: Path=Path('./config/'), log_file: Path=Path('benchmark_log.csv')):
+    """Main entry point"""
+    run_benchmarks(
+        mapping_filename=config_folder / 'dataset_model_maps.yaml',
+        problem_spec_filename=config_folder / 'problem_specifications.yaml',
+        out_file=log_file,
+        template_name=template_name
+    )
 
 if __name__ == "__main__":
-    cyclopts.run(main)
+    app()
