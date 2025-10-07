@@ -198,7 +198,7 @@ def plot_logs(log_entries: list[LoggedRun], use_time_index: bool = False):
 
     # Add time index for each model/problem/metric combination
     df = df.sort_values('timestamp')
-    df['time_index'] = df.groupby(['model_slug', 'problem_spec_name', 'metric_name']).cumcount()
+    df['time_index'] = df.groupby(['problem_spec_name', 'metric_name']).cumcount()
 
     # Extend each line to the end of the plot
     if use_time_index:
