@@ -53,7 +53,8 @@ def camel_keys(values: dict) -> dict:
 
 class ChapClient:
     def __init__(self, base_url: str = DEFAULT_URL, token: str | None = None, session=None):
-        self.base_url = base_url.rstrip("/") + "/v1"
+        self.root_url = base_url.rstrip("/")
+        self.base_url = self.root_url + "/v1"
         self.session = session or requests.Session()
         if token:
             self.session.headers["Authorization"] = f"Bearer {token}"
@@ -63,8 +64,8 @@ class ChapClient:
         """Build a client from CHAP_URL and CHAP_API_TOKEN, falling back to localhost without a token."""
         return cls(base_url=os.environ.get(URL_ENV_VAR, DEFAULT_URL), token=os.environ.get(TOKEN_ENV_VAR))
 
-    def _request(self, method: str, path: str, **kwargs):
-        url = f"{self.base_url}{path}"
+    def _request(self, method: str, path: str, url: str | None = None, **kwargs):
+        url = url or f"{self.base_url}{path}"
         try:
             response = self.session.request(method, url, timeout=120, **kwargs)
         except requests.exceptions.RequestException as e:
@@ -74,8 +75,9 @@ class ChapClient:
         return response.json()
 
     def is_healthy(self) -> bool:
+        """True if chap answers on its health endpoint, which lives at the root rather than under /v1."""
         try:
-            self._request("GET", "/health")
+            self._request("GET", "/health", url=f"{self.root_url}/health")
             return True
         except ChapClientError:
             return False

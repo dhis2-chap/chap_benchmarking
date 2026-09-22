@@ -1,0 +1,7 @@
+# Extra models seeded into the benchmarking chap instance, on top of chap-core config/configured_models/default.yaml.
+# Every version must be a full commit sha. To benchmark a new revision, add a new version label; never repoint one.
+# Only the last version listed under an entry is seeded; older labels stay in the database from earlier startups.
+
+- url: https://github.com/dhis2-chap/INLA_baseline_model
+  versions:
+    v1: "@7105a5370560ff05a4e1518618158f89225fe960"

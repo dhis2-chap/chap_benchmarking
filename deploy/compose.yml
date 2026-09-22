@@ -1,0 +1,158 @@
+# Benchmarking server deployment of chap-core. Built from the checkout in /data/chap-core.
+# Derived from chap-core's compose.yml: localhost-only port, extra model seed file bind-mounted.
+services:
+  chap:
+    restart: unless-stopped
+    build: /data/chap-core
+    init: true
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CHAP_DATABASE_URL: ${CHAP_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}
+      CELERY_BROKER: redis://redis:6379/0
+      CHAP_LOGS_DIR: /data/logs
+      CHAP_RUNS_DIR: /data/runs
+      CHAP_ROOT_PATH: ${CHAP_ROOT_PATH:-}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: chap:chap
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2000000000 # 2GB for runtime temp files (API service)
+      - type: volume
+        source: logs
+        target: /data/logs
+      - type: bind
+        source: /data/chap-deploy/models/benchmark.yaml
+        target: /app/config/configured_models/benchmark.yaml
+        read_only: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  worker:
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # NOTE: Built from Dockerfile.worker which extends the INLA worker image with chap-core
+    build:
+      context: /data/chap-core
+      dockerfile: Dockerfile.worker
+    environment:
+      IS_IN_DOCKER: 1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CHAP_DATABASE_URL: ${CHAP_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}
+      CELERY_BROKER: redis://redis:6379
+      RENV_PATHS_ROOT: /data/renv
+      UV_CACHE_DIR: /data/uv
+      CHAP_LOGS_DIR: /data/logs
+      CHAP_RUNS_DIR: /data/runs
+      PYTENSOR_FLAGS: "base_compiledir=/data/pytensor"
+    networks:
+      - default
+      - backend
+    command: "/app/.venv/bin/celery -A chap_core.rest_api.celery_tasks worker --loglevel=info"
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: chap:chap
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2000000000 # 2GB for runtime temp files (model execution)
+      - type: volume
+        source: runs
+        target: /data/runs
+      - type: volume
+        source: renv
+        target: /data/renv
+      - type: volume
+        source: uv
+        target: /data/uv
+      - type: volume
+        source: logs
+        target: /data/logs
+      - type: volume
+        source: pytensor
+        target: /data/pytensor
+  redis:
+    restart: unless-stopped
+    image: valkey/valkey:8
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgres:
+    restart: unless-stopped
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    volumes:
+      - chap-db:/var/lib/postgresql/data
+    networks:
+      - backend
+    expose:
+      - "5432"
+
+  # Optional services (chtorch, ewars_plus) can be enabled using a Docker Compose overlay.
+  # See compose.override.yml.example for how to enable these services.
+
+volumes:
+  chap-db: {}
+  logs: {}
+  renv: {}
+  uv: {}
+  pytensor: {}
+  runs: {}
+
+networks:
+  # redis and postgres live here, off the default network, so model services
+  # (which attach only to default) cannot reach the Celery broker or the database.
+  backend: {}

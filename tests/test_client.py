@@ -12,6 +12,16 @@ def test_token_is_sent_as_bearer_header(fake_session):
     assert fake_session.headers["Authorization"] == "Bearer secret"
 
 
+def test_is_healthy_uses_root_health_endpoint(client, fake_session):
+    assert client.is_healthy()
+    assert fake_session.calls[-1].path == "/health"
+
+
+def test_is_healthy_is_false_when_chap_does_not_answer(client, fake_session):
+    del fake_session.routes[("GET", "/health")]
+    assert not client.is_healthy()
+
+
 def test_list_specifications_sends_camel_case_query(client, fake_session, specification_summary):
     result = client.list_specifications(dataset_id=7, n_periods=3, n_splits=2, future_weather_provider=None)
     assert result == [specification_summary]

@@ -37,7 +37,7 @@ class FakeSession:
     calls: list = field(default_factory=list)
 
     def request(self, method, url, params=None, json=None, timeout=None):
-        path = url.split("/v1", 1)[1]
+        path = url.split("/v1", 1)[1] if "/v1/" in url else url.removeprefix("http://chap")
         self.calls.append(Call(method, path, params, json))
         status, payload = self.routes.get((method, path), (404, {"detail": "Not Found"}))
         return FakeResponse(status, payload)
