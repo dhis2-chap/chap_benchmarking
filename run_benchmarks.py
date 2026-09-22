@@ -22,7 +22,7 @@ import cyclopts
 import pydantic
 import yaml
 
-from chap_client import ChapClient, ChapClientError
+from chap_client import FAILED_STATUSES, RUNNING_STATUSES, ChapClient, ChapClientError
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +97,48 @@ class BenchmarkRunner:
         summary = self.find_specification(problem)
         return self.client.get_specification(summary["id"]) if summary else None
 
+    def job_statuses(self, problem: Problem) -> dict[str, set[str]]:
+        """Statuses of the jobs chap still tracks for this problem, keyed by job name (problem/model)."""
+        statuses: dict[str, set[str]] = {}
+        for job in self.client.list_jobs():
+            name = job.get("name") or ""
+            if name.startswith(f"{problem.name}/") and job.get("status"):
+                statuses.setdefault(name, set()).add(str(job["status"]).upper())
+        return statuses
+
     def pending_models(self, problem: Problem) -> list[dict]:
-        """Configured models of the problem with no backtest under its specification."""
-        models = self.configured_models(problem)
+        """Configured models of the problem with no backtest under its specification.
+
+        Models whose job is still running are left alone, and models whose last job
+        failed are held back until rerun with force, so a model that cannot run is not
+        resubmitted on every tick.
+        """
         specification = self.results(problem)
-        if specification is None:
-            return models
-        done = {backtest["configuredModel"]["id"] for backtest in specification["backtests"]}
-        return [model for model in models if model["id"] not in done]
+        done = {backtest["configuredModel"]["id"] for backtest in specification["backtests"]} if specification else set()
+        statuses = self.job_statuses(problem)
+        pending = []
+        for model in self.configured_models(problem):
+            if model["id"] in done:
+                continue
+            job_status = statuses.get(f"{problem.name}/{model['name']}", set())
+            if job_status & RUNNING_STATUSES:
+                logger.info("Problem %s: %s is still running, skipping", problem.name, model["name"])
+            elif job_status & FAILED_STATUSES:
+                logger.warning("Problem %s: %s failed last time, rerun with --force", problem.name, model["name"])
+            else:
+                pending.append(model)
+        return pending
+
+    def failed_models(self, problem: Problem) -> list[str]:
+        """Names of the problem's models whose last job failed and that have no backtest."""
+        specification = self.results(problem)
+        done = {backtest["configuredModel"]["name"] for backtest in specification["backtests"]} if specification else set()
+        statuses = self.job_statuses(problem)
+        return [
+            name
+            for name in problem.models
+            if name not in done and statuses.get(f"{problem.name}/{name}", set()) & FAILED_STATUSES
+        ]
 
     def run(self, problem: Problem, force: bool = False) -> list[RunResult]:
         """Submit one backtest per pending model (every model with force) and wait for them all.
@@ -196,13 +230,14 @@ def run(problem: str | None = None, config_folder: Path = DEFAULT_CONFIG_FOLDER,
 
 @app.command
 def status(config_folder: Path = DEFAULT_CONFIG_FOLDER):
-    """Show each problem's specification, how many backtests it has and which models are pending."""
+    """Show each problem's specification, how many backtests it has, and which models are pending or failed."""
     runner = BenchmarkRunner(ChapClient.from_env())
     for p in _problems(config_folder, None):
         summary = runner.find_specification(p)
         pending = [m["name"] for m in runner.pending_models(p)]
+        failed = runner.failed_models(p)
         spec = f"specification {summary['id']} with {summary['backtestCount']} backtests" if summary else "no runs yet"
-        print(f"{p.name}: {spec}; pending: {pending or 'none'}")
+        print(f"{p.name}: {spec}; pending: {pending or 'none'}; failed (rerun with --force): {failed or 'none'}")
 
 
 @app.command

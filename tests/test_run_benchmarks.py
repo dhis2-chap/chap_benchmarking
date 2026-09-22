@@ -52,6 +52,30 @@ def test_pending_models_is_every_model_when_nothing_has_run(runner, problem, fak
     assert [m["name"] for m in runner.pending_models(problem)] == ["naive_model", "chap_ewars_monthly"]
 
 
+def test_pending_models_holds_back_models_whose_last_job_failed(runner, problem, fake_session):
+    fake_session.routes[("GET", "/jobs")] = (
+        200,
+        [{"id": "j1", "name": "rwanda_monthly/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"}],
+    )
+    assert runner.pending_models(problem) == []
+    assert runner.failed_models(problem) == ["chap_ewars_monthly"]
+    assert [r.model for r in runner.run(problem)] == []
+    assert [r.model for r in runner.run(problem, force=True)] == ["naive_model", "chap_ewars_monthly"]
+
+
+def test_pending_models_skips_models_with_a_running_job(runner, problem, fake_session):
+    fake_session.routes[("GET", "/jobs")] = (
+        200,
+        [
+            {"id": "j1", "name": "rwanda_monthly/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"},
+            {"id": "j2", "name": "rwanda_monthly/chap_ewars_monthly", "status": "STARTED", "type": "create_backtest"},
+            {"id": "j3", "name": "other_problem/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"},
+        ],
+    )
+    assert runner.pending_models(problem) == []
+    assert runner.failed_models(problem) == ["chap_ewars_monthly"]
+
+
 def test_run_only_submits_pending_models(runner, problem, fake_session):
     results = runner.run(problem)
     submitted = [c.json["modelId"] for c in fake_session.calls if c.path == "/analytics/create-backtest"]

@@ -21,6 +21,7 @@ TOKEN_ENV_VAR = "CHAP_API_TOKEN"
 
 SUCCESS_STATUSES = {"SUCCESS", "COMPLETED"}
 FAILED_STATUSES = {"FAILURE", "FAILED", "ERROR", "REVOKED"}
+RUNNING_STATUSES = {"PENDING", "RECEIVED", "STARTED", "RETRY"}
 
 
 class ChapClientError(RuntimeError):
@@ -114,6 +115,10 @@ class ChapClient:
         return self._request("GET", f"/crud/backtests/{backtest_id}")
 
     # jobs
+
+    def list_jobs(self) -> list[dict]:
+        """Every job chap still tracks, with its name and status."""
+        return self._request("GET", "/jobs")
 
     def job_status(self, job_id: str) -> str:
         status = self._request("GET", f"/jobs/{job_id}")

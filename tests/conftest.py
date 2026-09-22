@@ -126,6 +126,7 @@ def fake_session(dataset, configured_models, specification_summary, specificatio
         ("GET", "/crud/configured-models"): (200, configured_models),
         ("GET", "/crud/backtest-specifications"): (200, [specification_summary]),
         ("GET", "/crud/backtest-specifications/11"): (200, specification_read),
+        ("GET", "/jobs"): (200, []),
         ("GET", "/jobs/job-ok"): (200, "SUCCESS"),
         ("GET", "/jobs/job-ok/database_result"): (200, {"id": 42}),
         ("GET", "/jobs/job-bad"): (200, "FAILURE"),
