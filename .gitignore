@@ -1,2 +1,7 @@
-config/*.yaml
-plots/*.html
+config/*
+!config/README.md
+.env
+cron.log
+.venv/
+__pycache__/
+*.egg-info/

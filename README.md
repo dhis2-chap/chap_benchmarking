@@ -1,51 +1,58 @@
-# Purpose
-Included here are files used for keeping track of the performance of different models over time, on a fixed set of datasets
-Files are: 
-- 'run_benchmarks.py': script that runs benchmark for a given model
-    - git pull the given model repository
-    - look through configs model and add them to the database
-    - For each problem-spec and model-config slug combo:
-        - run the benchmark
-        - log the results to the database
-- 'run-benchmarks.yml': github actions workflow that logs into the benchmark server and runs the benchmarks
+# CHAP benchmarking
 
-The benchmark script assumes that chap_core server is running on localhost on the server and that the following folder structure exists:
+Runs the standing model benchmarks against a chap-core instance and keeps
+nothing itself: results live in chap-core's database and are read back through
+its REST API.
 
-```
-models/
-    ├── <model-slug>/
-    │   ├── configs/
-    │   │  <config-slug>_<n>.yaml
-problem_config_mapping.yaml
-```
+## How it fits together
 
-## How to set up a benchmarking server locally
+A benchmark problem (`problem_specifications.yaml`) is a human-chosen name for a
+dataset plus the backtest parameters plus the configured models to run. chap-core
+deduplicates the (dataset, parameters) tuple into one `BacktestSpecification`,
+so every backtest a problem produces lands under one specification and is
+comparable by construction. This repo owns what to run and when; chap-core owns
+the results and knows nothing about problem names.
 
-1. Clone this respository and cd into the the directory `git clone git@github.com:dhis2-chap/chap_benchmarking.git && cd chap_benchmarking`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Make sure you have the chap platform running locally on port 8000
-4. Run benchmarks by running `python run_benchmarks.py`. This will by default run a single model on a small example_dataset. Edit the config files to change what is being run.
+A model is identified by its configured model row in chap-core, which is
+immutable per name, version and configuration. A model is pending for a problem
+when it has no backtest under the problem's specification. Registering a new
+model version in chap-core (a new version label pinned to a commit in its
+`config/configured_models/*.yaml`, then a restart) is therefore what triggers a
+run for it.
 
+Files:
 
-## How to seed a dataset
-- Make a dataset seeding file (see example_config/dataset_seeds.yaml).
-- Run `python seed_datasets.py seed --seeding-yaml-filename example_config/dataset_seeds.yaml` (replace the seeding config file to match your file)
+- `chap_client.py`: thin HTTP client for the chap-core endpoints the benchmarks need
+- `run_benchmarks.py`: `run`, `status` and `results` commands
+- `check_updates_and_trigger_run.py`: cron entry point, runs pending models under a lock
+- `seed_datasets.py`: import the benchmark datasets into chap
 
+## Running locally
 
+1. `git clone git@github.com:dhis2-chap/chap_benchmarking.git && cd chap_benchmarking && uv sync`
+2. Have chap-core running (default `http://localhost:8000`). Point elsewhere with `CHAP_URL`; if the instance is token-gated set `CHAP_API_TOKEN`.
+3. `cp -r example_config config` and edit `config/problem_specifications.yaml`.
+4. Seed datasets: `uv run seed_datasets.py seed config/dataset_seeds.yaml`
+5. `uv run run_benchmarks.py status` shows each problem's specification and pending models.
+6. `uv run run_benchmarks.py run` runs every pending model. `--problem NAME` limits to one problem, `--force` reruns every model.
+7. `uv run run_benchmarks.py results NAME` prints the backtests under a problem with version, source digest and aggregate metrics.
 
-# Server setup
-This repo is setup to automatically run benchmarks on a server.
+## Server
 
-Note: On the benchmark server, the config is in /data/chap_benchmarking/local_config/.
+The benchmarking server keeps this repo in `/data/chap_benchmarking` with the live
+configuration in `/data/chap_benchmarking/config/` and `CHAP_URL` /
+`CHAP_API_TOKEN` in `/data/chap_benchmarking/.env`. `deploy.sh` runs on push to
+main (see `.github/workflows/deploy.yml`) and installs a cron job that runs
+`check_updates_and_trigger_run.py` every 15 minutes.
 
-Latest results can be found at: [http://158.37.66.207:8080/benchmark_plot.html](http://158.37.66.207:8080/benchmark_plot.html)
-
-Benchmarks are run every 15 minutes and will fetch latest models from github. 
-
-To manually trigger a run, log into the server and do:
+To trigger a run by hand:
 
 ```bash
 cd /data/chap_benchmarking
-source .venv/bin/activate
-python check_updates_and_trigger_run.py
+set -a; . ./.env; set +a
+.venv/bin/python check_updates_and_trigger_run.py
 ```
+
+Results are rendered by the model marketplace, which fetches
+`GET /v1/crud/backtest-specifications/{id}` from the server's chap instance at
+build time.

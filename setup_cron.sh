@@ -2,8 +2,8 @@
 
 # Setup cronjob for check_updates_and_trigger_run.py
 
-# Define the cron job command
-CRON_CMD="*/1 * * * * cd /data/chap_benchmarking && /data/chap_benchmarking/.venv/bin/python check_updates_and_trigger_run.py >> /data/chap_benchmarking/cron.log 2>&1"
+# Define the cron job command. CHAP_URL and CHAP_API_TOKEN are read from .env if present.
+CRON_CMD="*/15 * * * * cd /data/chap_benchmarking && set -a && [ -f .env ] && . ./.env; set +a; /data/chap_benchmarking/.venv/bin/python check_updates_and_trigger_run.py >> /data/chap_benchmarking/cron.log 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "check_updates_and_trigger_run.py"; then
@@ -16,5 +16,5 @@ else
     (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
 fi
 
-echo "Cron job has been set up to run every 5 minutes"
+echo "Cron job has been set up to run every 15 minutes"
 echo "Logs will be written to /data/chap_benchmarking/cron.log"

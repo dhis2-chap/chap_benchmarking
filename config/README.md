@@ -1,7 +1,6 @@
-This folder should have the following files:
+This folder holds the live configuration and is gitignored. It should have:
 
-- `dataset_seeds.yaml`: name->filename mapping of datasets used to seed the database
-- `problem_specifications.yaml`: list of problem specifications to run benchmarks on
-- `dataset_model_maps.yaml`: mapping of datasets to models
+- `problem_specifications.yaml`: the standing benchmark problems (name, dataset, backtest_params, models)
+- `dataset_seeds.yaml`: dataset name -> make-dataset request JSON, used to seed chap
 
-See the example_config folder for example files
+See `example_config/` for the format.

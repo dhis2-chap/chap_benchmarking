@@ -1,5 +1,0 @@
-global_models:
-    - 'ewars_template'
-    - 'hmc_model'
-specific_models:
-  - 'chtorch:medium'
