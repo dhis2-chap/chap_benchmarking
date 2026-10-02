@@ -6,12 +6,13 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 CRON_CMD="*/15 * * * * cd $DIR && set -a && [ -f .env ] && . ./.env; set +a; $DIR/.venv/bin/python check_updates_and_trigger_run.py >> $DIR/cron.log 2>&1"
 
-if crontab -l 2>/dev/null | grep -q "check_updates_and_trigger_run.py"; then
+current=$(crontab -l 2>/dev/null || true)
+if grep -q "check_updates_and_trigger_run.py" <<< "$current"; then
     echo "Cron job already exists, updating it..."
 else
     echo "Adding new cron job..."
 fi
-(crontab -l 2>/dev/null | grep -v "check_updates_and_trigger_run.py"; echo "$CRON_CMD") | crontab -
+{ grep -v "check_updates_and_trigger_run.py" <<< "$current" || true; echo "$CRON_CMD"; } | crontab -
 
 echo "Cron job has been set up to run every 15 minutes"
 echo "Logs will be written to $DIR/cron.log"
