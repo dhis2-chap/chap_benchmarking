@@ -50,14 +50,37 @@ def example_config_dir():
 
 @pytest.fixture
 def dataset():
-    return {"id": 7, "name": "rwanda_evaluation_set", "type": "evaluation"}
+    return {
+        "id": 7,
+        "name": "rwanda_evaluation_set",
+        "type": "evaluation",
+        "periodType": "month",
+        "covariates": ["disease_cases", "population", "rainfall", "mean_temperature"],
+    }
+
+
+def _model(id, name, covariates=("rainfall", "mean_temperature", "population"), period_type="any", health="live"):
+    return {
+        "id": id,
+        "name": name,
+        "version": "v1",
+        "sourceDigest": "abc1234def",
+        "supportedPeriodType": period_type,
+        "healthStatus": health,
+        "target": {"name": "disease_cases"},
+        "covariates": [{"name": c} for c in covariates],
+    }
 
 
 @pytest.fixture
 def configured_models():
+    """Two runnable models, then one per reason a model is left out: not live, weekly only, missing a covariate."""
     return [
-        {"id": 3, "name": "naive_model", "version": "v1", "sourceDigest": "abc1234def"},
-        {"id": 5, "name": "chap_ewars_monthly", "version": "stable", "sourceDigest": "9876543210"},
+        _model(3, "naive_model", covariates=()),
+        _model(5, "chap_ewars_monthly", covariates=("rainfall", "mean_temperature", "population", "gen:month_of_year")),
+        _model(8, "stale_model", health="revision_mismatch"),
+        _model(9, "weekly_model", period_type="week"),
+        _model(10, "humidity_model", covariates=("rainfall", "humidity")),
     ]
 
 
@@ -72,7 +95,6 @@ def problem(dataset, backtest_params):
         name="rwanda_monthly",
         dataset_name=dataset["name"],
         backtest_params=BacktestParams(**backtest_params),
-        models=["naive_model", "chap_ewars_monthly"],
     )
 
 
@@ -134,16 +156,16 @@ def fake_session(dataset, configured_models, specification_summary, specificatio
     }
     session = FakeSession(routes)
 
-    def create_backtest(method, url, params=None, json=None, timeout=None):
-        job_id = "job-ok" if json["modelId"] == 3 else "job-bad"
-        return FakeResponse(200, {"id": job_id})
+    def create_backtests(method, url, params=None, json=None, timeout=None):
+        jobs = [{"configuredModelId": m, "jobId": "job-ok" if m == 3 else "job-bad"} for m in json["modelIds"]]
+        return FakeResponse(200, {"specificationId": 11, "jobs": jobs})
 
     original = session.request
 
     def request(method, url, params=None, json=None, timeout=None):
-        if method == "POST" and url.endswith("/analytics/create-backtest"):
-            session.calls.append(Call(method, "/analytics/create-backtest", params, json))
-            return create_backtest(method, url, params, json, timeout)
+        if method == "POST" and url.endswith("/analytics/create-backtests"):
+            session.calls.append(Call(method, "/analytics/create-backtests", params, json))
+            return create_backtests(method, url, params, json, timeout)
         return original(method, url, params, json, timeout)
 
     session.request = request

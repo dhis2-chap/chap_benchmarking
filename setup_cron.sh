@@ -1,20 +1,18 @@
 #!/bin/bash
+# Install or update the cron job that runs check_updates_and_trigger_run.py every 15
+# minutes from this checkout. CHAP_URL and CHAP_API_TOKEN are read from .env if present.
+set -euo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Setup cronjob for check_updates_and_trigger_run.py
+CRON_CMD="*/15 * * * * cd $DIR && set -a && [ -f .env ] && . ./.env; set +a; $DIR/.venv/bin/python check_updates_and_trigger_run.py >> $DIR/cron.log 2>&1"
 
-# Define the cron job command. CHAP_URL and CHAP_API_TOKEN are read from .env if present.
-CRON_CMD="*/15 * * * * cd /data/chap_benchmarking && set -a && [ -f .env ] && . ./.env; set +a; /data/chap_benchmarking/.venv/bin/python check_updates_and_trigger_run.py >> /data/chap_benchmarking/cron.log 2>&1"
-
-# Check if cron job already exists
-if crontab -l 2>/dev/null | grep -q "check_updates_and_trigger_run.py"; then
+current=$(crontab -l 2>/dev/null || true)
+if grep -q "check_updates_and_trigger_run.py" <<< "$current"; then
     echo "Cron job already exists, updating it..."
-    # Remove old cron job and add new one
-    (crontab -l 2>/dev/null | grep -v "check_updates_and_trigger_run.py"; echo "$CRON_CMD") | crontab -
 else
     echo "Adding new cron job..."
-    # Add new cron job
-    (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
 fi
+{ grep -v "check_updates_and_trigger_run.py" <<< "$current" || true; echo "$CRON_CMD"; } | crontab -
 
 echo "Cron job has been set up to run every 15 minutes"
-echo "Logs will be written to /data/chap_benchmarking/cron.log"
+echo "Logs will be written to $DIR/cron.log"
