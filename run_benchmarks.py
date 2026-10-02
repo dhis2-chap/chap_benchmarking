@@ -1,15 +1,18 @@
 """Run the standing benchmarks against a chap-core instance and read the results back.
 
 A benchmark problem is a human-chosen name for a dataset plus the backtest
-parameters plus the configured models to run. chap-core deduplicates the
-(dataset, parameters) tuple into a `BacktestSpecification`, so every backtest a
-problem produces lands under one specification and is comparable by
-construction. Results live in chap-core's database; this script keeps nothing.
+parameters. chap-core deduplicates the (dataset, parameters) tuple into a
+`BacktestSpecification`, so every backtest a problem produces lands under one
+specification and is comparable by construction. Results live in chap-core's
+database; this script keeps nothing.
 
-Model identity is the configured model row in chap-core, which is immutable per
-name, version and configuration. A model is pending for a problem when it has no
-backtest under the problem's specification, so registering a new model version in
-chap-core is what triggers a run for it.
+The models to run are not configured here: every live configured model in chap
+that the problem's dataset can feed (period type and covariates) is a candidate.
+chap-admin keeps chap's models in step with the model marketplace, so installing
+or updating a marketplace model is what makes a new model pending. Model identity
+is the configured model row in chap-core, which is immutable per name, version
+and configuration; a model is pending for a problem when it has no backtest under
+the problem's specification.
 """
 
 from __future__ import annotations
@@ -45,7 +48,22 @@ class Problem(pydantic.BaseModel):
     name: str
     dataset_name: str
     backtest_params: BacktestParams
-    models: list[str]
+
+
+GENERATED_COVARIATE_PREFIX = "gen:"
+
+
+def dataset_can_run(dataset: dict, model: dict) -> bool:
+    """True if the dataset has the model's period type and every covariate it needs.
+
+    Covariates chap generates itself (`gen:` prefix) are not required of the dataset.
+    """
+    period_type = model.get("supportedPeriodType") or "any"
+    if period_type != "any" and period_type != dataset.get("periodType"):
+        return False
+    required = {model["target"]["name"], *(covariate["name"] for covariate in model.get("covariates", []))}
+    needed = {name for name in required if not name.startswith(GENERATED_COVARIATE_PREFIX)}
+    return needed <= set(dataset.get("covariates") or [])
 
 
 class RunResult(pydantic.BaseModel):
@@ -75,11 +93,13 @@ class BenchmarkRunner:
         raise ValueError(f"Dataset {problem.dataset_name!r} not found in chap. Available: {[d['name'] for d in datasets]}")
 
     def configured_models(self, problem: Problem) -> list[dict]:
-        by_name = {model["name"]: model for model in self.client.list_configured_models()}
-        missing = [name for name in problem.models if name not in by_name]
-        if missing:
-            raise ValueError(f"Configured models {missing} not found in chap. Available: {sorted(by_name)}")
-        return [by_name[name] for name in problem.models]
+        """Live configured models that the problem's dataset can run, in chap's order."""
+        dataset = self.dataset(problem)
+        return [
+            model
+            for model in self.client.list_configured_models()
+            if model.get("healthStatus") == "live" and dataset_can_run(dataset, model)
+        ]
 
     def find_specification(self, problem: Problem) -> dict | None:
         """The specification summary for this problem, or None if nothing has run under it yet."""
@@ -135,13 +155,13 @@ class BenchmarkRunner:
         done = {backtest["configuredModel"]["name"] for backtest in specification["backtests"]} if specification else set()
         statuses = self.job_statuses(problem)
         return [
-            name
-            for name in problem.models
-            if name not in done and statuses.get(f"{problem.name}/{name}", set()) & FAILED_STATUSES
+            model["name"]
+            for model in self.configured_models(problem)
+            if model["name"] not in done and statuses.get(f"{problem.name}/{model['name']}", set()) & FAILED_STATUSES
         ]
 
     def run(self, problem: Problem, force: bool = False) -> list[RunResult]:
-        """Submit one backtest per pending model (every model with force) and wait for them all.
+        """Submit every pending model (every candidate with force) in one request and wait for them all.
 
         One model failing does not stop the others; failures are returned, not raised.
         """
@@ -150,23 +170,22 @@ class BenchmarkRunner:
         if not models:
             logger.info("Problem %s: nothing to run", problem.name)
             return []
-        results = []
-        for model in models:
-            result = RunResult(problem=problem.name, model=model["name"])
-            try:
-                result.job_id = self.client.create_backtest(
-                    name=f"{problem.name}/{model['name']}",
-                    dataset_id=dataset["id"],
-                    model_id=model["id"],
-                    backtest_params=problem.backtest_params.as_request(),
-                )
-                logger.info("Problem %s: submitted %s as job %s", problem.name, model["name"], result.job_id)
-            except ChapClientError as e:
-                result.error = str(e)
-                logger.error("Problem %s: could not submit %s: %s", problem.name, model["name"], e)
-            results.append(result)
+        try:
+            response = self.client.create_backtests(
+                name=problem.name,
+                dataset_id=dataset["id"],
+                model_ids=[model["id"] for model in models],
+                backtest_params=problem.backtest_params.as_request(),
+            )
+        except ChapClientError as e:
+            logger.error("Problem %s: could not submit %s: %s", problem.name, [m["name"] for m in models], e)
+            return [RunResult(problem=problem.name, model=model["name"], error=str(e)) for model in models]
+        logger.info("Problem %s: submitted %d models under specification %s", problem.name, len(models), response["specificationId"])
+        jobs = {job["configuredModelId"]: job["jobId"] for job in response["jobs"]}
+        results = [RunResult(problem=problem.name, model=model["name"], job_id=jobs.get(model["id"])) for model in models]
         for result in results:
             if result.job_id is None:
+                result.error = "chap returned no job for this model"
                 continue
             try:
                 result.backtest_id = self.client.wait_for_job(result.job_id, self.timeout, self.poll_interval)
@@ -230,14 +249,18 @@ def run(problem: str | None = None, config_folder: Path = DEFAULT_CONFIG_FOLDER,
 
 @app.command
 def status(config_folder: Path = DEFAULT_CONFIG_FOLDER):
-    """Show each problem's specification, how many backtests it has, and which models are pending or failed."""
+    """Show each problem's specification, how many backtests it has, which models it can run, and which are pending or failed."""
     runner = BenchmarkRunner(ChapClient.from_env())
     for p in _problems(config_folder, None):
         summary = runner.find_specification(p)
+        candidates = [m["name"] for m in runner.configured_models(p)]
         pending = [m["name"] for m in runner.pending_models(p)]
         failed = runner.failed_models(p)
         spec = f"specification {summary['id']} with {summary['backtestCount']} backtests" if summary else "no runs yet"
-        print(f"{p.name}: {spec}; pending: {pending or 'none'}; failed (rerun with --force): {failed or 'none'}")
+        print(
+            f"{p.name}: {spec}; models: {candidates or 'none'}; pending: {pending or 'none'}; "
+            f"failed (rerun with --force): {failed or 'none'}"
+        )
 
 
 @app.command

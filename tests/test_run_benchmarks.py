@@ -1,6 +1,6 @@
 import pytest
 
-from run_benchmarks import BenchmarkRunner, Problem, format_results, load_problems
+from run_benchmarks import Problem, dataset_can_run, format_results, load_problems
 
 
 def test_load_problems_from_example_config(example_config_dir):
@@ -9,7 +9,6 @@ def test_load_problems_from_example_config(example_config_dir):
     problem = problems[0]
     assert problem.dataset_name == "rwanda_evaluation_set"
     assert problem.backtest_params.as_request() == {"n_periods": 3, "n_splits": 2, "stride": 1, "n_retrain": 1}
-    assert problem.models == ["naive_model", "chap_ewars_monthly"]
 
 
 def test_find_specification_filters_on_dataset_and_full_parameter_tuple(runner, problem, fake_session, specification_summary):
@@ -31,10 +30,18 @@ def test_find_specification_rejects_ambiguous_match(runner, problem, fake_sessio
         runner.find_specification(problem)
 
 
-def test_unknown_model_name_is_an_error(runner, problem):
-    broken = Problem(**{**problem.model_dump(), "models": ["no_such_model"]})
-    with pytest.raises(ValueError, match="no_such_model"):
-        runner.configured_models(broken)
+def test_configured_models_are_the_live_models_the_dataset_can_run(runner, problem):
+    assert [m["name"] for m in runner.configured_models(problem)] == ["naive_model", "chap_ewars_monthly"]
+
+
+def test_dataset_can_run_ignores_generated_covariates_and_matches_period_type(dataset, configured_models):
+    ewars, stale, weekly, humidity = configured_models[1:]
+    assert dataset_can_run(dataset, ewars)
+    assert dataset_can_run(dataset, stale)
+    assert not dataset_can_run(dataset, weekly)
+    assert dataset_can_run({**dataset, "periodType": "week"}, weekly)
+    assert not dataset_can_run(dataset, humidity)
+    assert not dataset_can_run({**dataset, "covariates": ["rainfall"]}, ewars)
 
 
 def test_unknown_dataset_name_is_an_error(runner, problem):
@@ -78,17 +85,19 @@ def test_pending_models_skips_models_with_a_running_job(runner, problem, fake_se
 
 def test_run_only_submits_pending_models(runner, problem, fake_session):
     results = runner.run(problem)
-    submitted = [c.json["modelId"] for c in fake_session.calls if c.path == "/analytics/create-backtest"]
-    assert submitted == [5]
+    submitted = [c.json for c in fake_session.calls if c.path == "/analytics/create-backtests"]
+    assert len(submitted) == 1
+    assert submitted[0]["modelIds"] == [5]
     assert [r.model for r in results] == ["chap_ewars_monthly"]
 
 
-def test_run_with_force_submits_every_model_and_one_failure_does_not_stop_the_rest(runner, problem, fake_session):
+def test_run_with_force_submits_every_model_in_one_request_and_one_failure_does_not_stop_the_rest(
+    runner, problem, fake_session
+):
     results = runner.run(problem, force=True)
-    submitted = [c.json for c in fake_session.calls if c.path == "/analytics/create-backtest"]
-    assert [body["modelId"] for body in submitted] == [3, 5]
-    assert submitted[0]["name"] == "rwanda_monthly/naive_model"
-    assert submitted[0]["nPeriods"] == 3
+    submitted = [c.json for c in fake_session.calls if c.path == "/analytics/create-backtests"]
+    assert len(submitted) == 1
+    assert submitted[0] == {"name": "rwanda_monthly", "datasetId": 7, "modelIds": [3, 5], "nPeriods": 3, "nSplits": 2, "stride": 1, "nRetrain": 1}
     by_model = {r.model: r for r in results}
     assert by_model["naive_model"].backtest_id == 42
     assert by_model["naive_model"].error is None

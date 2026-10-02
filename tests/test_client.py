@@ -30,11 +30,12 @@ def test_list_specifications_sends_camel_case_query(client, fake_session, specif
     assert call.params == {"datasetId": 7, "nPeriods": 3, "nSplits": 2}
 
 
-def test_create_backtest_posts_camel_case_body_and_returns_job_id(client, fake_session, backtest_params):
-    job_id = client.create_backtest("naive_model_rwanda", dataset_id=7, model_id=3, backtest_params=backtest_params)
-    assert job_id == "job-ok"
+def test_create_backtests_posts_camel_case_body_and_returns_specification_and_jobs(client, fake_session, backtest_params):
+    response = client.create_backtests("rwanda_monthly", dataset_id=7, model_ids=[3, 5], backtest_params=backtest_params)
+    assert response["specificationId"] == 11
+    assert [job["jobId"] for job in response["jobs"]] == ["job-ok", "job-bad"]
     body = fake_session.calls[-1].json
-    assert body == {"name": "naive_model_rwanda", "datasetId": 7, "modelId": 3, "nPeriods": 3, "nSplits": 2, "stride": 1, "nRetrain": 1}
+    assert body == {"name": "rwanda_monthly", "datasetId": 7, "modelIds": [3, 5], "nPeriods": 3, "nSplits": 2, "stride": 1, "nRetrain": 1}
 
 
 def test_wait_for_job_returns_database_id_on_success(client):

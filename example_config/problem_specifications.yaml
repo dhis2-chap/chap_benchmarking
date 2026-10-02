@@ -7,9 +7,10 @@
 # parameters in place: that would start a new specification and orphan the old
 # results. Add a new problem instead.
 #
-# models are configured model names as registered in chap-core. A model is run
-# when it has no backtest under the problem's specification, so registering a new
-# model version in chap-core is what triggers a run for it.
+# There is no model list: every live configured model in chap whose period type
+# and covariates the dataset satisfies is run when it has no backtest under the
+# problem's specification. chap-admin install-all / update-all keeps chap's models
+# in step with the model marketplace, so that is what triggers a run.
 
 - name: rwanda_monthly
   dataset_name: rwanda_evaluation_set
@@ -19,6 +20,3 @@
     stride: 1
     n_retrain: 1
     # future_weather_provider: climatology   # omit to use chap-core's default
-  models:
-    - naive_model
-    - chap_ewars_monthly

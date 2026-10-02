@@ -106,10 +106,13 @@ class ChapClient:
         """One specification with every backtest under it, newest first."""
         return self._request("GET", f"/crud/backtest-specifications/{specification_id}")
 
-    def create_backtest(self, name: str, dataset_id: int, model_id: int | str, backtest_params: dict) -> str:
-        """Submit one backtest and return the job id."""
-        body = camel_keys({"name": name, "dataset_id": dataset_id, "model_id": model_id, **backtest_params})
-        return self._request("POST", "/analytics/create-backtest", json=body)["id"]
+    def create_backtests(self, name: str, dataset_id: int, model_ids: list[int | str], backtest_params: dict) -> dict:
+        """Submit one backtest per model under one specification.
+
+        Returns the response: `specificationId` and `jobs`, one `{configuredModelId, jobId}` per model.
+        """
+        body = camel_keys({"name": name, "dataset_id": dataset_id, "model_ids": model_ids, **backtest_params})
+        return self._request("POST", "/analytics/create-backtests", json=body)
 
     def get_backtest(self, backtest_id: int) -> dict:
         return self._request("GET", f"/crud/backtests/{backtest_id}")
