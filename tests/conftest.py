@@ -49,6 +49,29 @@ def example_config_dir():
 
 
 @pytest.fixture
+def csv_rows():
+    """Two rows in the climate-health-data CSV layout, one with a missing case count."""
+    return [
+        {"time_period": "1998-01", "location": "LA-XA", "location_name": "Xaignabouli", "rainfall": "2.58", "disease_cases": "12"},
+        {"time_period": "1998-02", "location": "LA-XA", "location_name": "Xaignabouli", "rainfall": "0.4", "disease_cases": ""},
+    ]
+
+
+@pytest.fixture
+def geojson():
+    """A feature collection with a `crs` key and one feature per location, keyed on the feature id."""
+    polygon = {"type": "Polygon", "coordinates": [[[101.0, 18.0], [102.0, 18.0], [102.0, 19.0], [101.0, 18.0]]]}
+    return {
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}},
+        "features": [
+            {"type": "Feature", "id": "LA-XA", "properties": {"name": "Xaignabouli"}, "geometry": polygon},
+            {"type": "Feature", "id": "LA-VI", "properties": {"name": "Vientiane"}, "geometry": polygon},
+        ],
+    }
+
+
+@pytest.fixture
 def dataset():
     return {
         "id": 7,

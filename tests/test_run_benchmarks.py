@@ -5,10 +5,14 @@ from run_benchmarks import Problem, dataset_can_run, format_results, load_proble
 
 def test_load_problems_from_example_config(example_config_dir):
     problems = load_problems(example_config_dir / "problem_specifications.yaml")
-    assert [p.name for p in problems] == ["rwanda_monthly"]
-    problem = problems[0]
-    assert problem.dataset_name == "rwanda_evaluation_set"
-    assert problem.backtest_params.as_request() == {"n_periods": 3, "n_splits": 2, "stride": 1, "n_retrain": 1}
+    assert [p.name for p in problems] == ["vietnam_monthly", "laos_monthly", "thailand_monthly"]
+    assert [p.dataset_name for p in problems] == [
+        "vietnam_evaluation_set",
+        "laos_evaluation_set",
+        "thailand_evaluation_set",
+    ]
+    for problem in problems:
+        assert problem.backtest_params.as_request() == {"n_periods": 3, "n_splits": 6, "stride": 1, "n_retrain": 1}
 
 
 def test_find_specification_filters_on_dataset_and_full_parameter_tuple(runner, problem, fake_session, specification_summary):
