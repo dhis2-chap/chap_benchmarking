@@ -12,11 +12,27 @@
 # problem's specification. chap-admin install-all / update-all keeps chap's models
 # in step with the model marketplace, so that is what triggers a run.
 
-- name: rwanda_monthly
-  dataset_name: rwanda_evaluation_set
+- name: vietnam_monthly
+  dataset_name: vietnam_evaluation_set
   backtest_params:
     n_periods: 3     # forecast horizon, in periods
-    n_splits: 2      # number of rolling train/test splits
+    n_splits: 6      # number of rolling train/test splits
     stride: 1
     n_retrain: 1
     # future_weather_provider: climatology   # omit to use chap-core's default
+
+- name: laos_monthly
+  dataset_name: laos_evaluation_set
+  backtest_params:
+    n_periods: 3
+    n_splits: 6
+    stride: 1
+    n_retrain: 1
+
+- name: thailand_monthly
+  dataset_name: thailand_evaluation_set
+  backtest_params:
+    n_periods: 3
+    n_splits: 6
+    stride: 1
+    n_retrain: 1

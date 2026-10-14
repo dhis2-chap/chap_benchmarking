@@ -1,3 +1,9 @@
 # Dataset name -> make-dataset request body (JSON), relative to this file.
 # Datasets already present in chap are skipped.
-rwanda_evaluation_set: rwanda_benchmark.json
+#
+# The request bodies are built from the monthly admin-1 CSV and GeoJSON pairs in
+# https://github.com/dhis2/climate-health-data (commit af362d5260c6), for example:
+#   uv run seed_datasets.py convert chap_VNM_admin1_monthly.csv chap_VNM_admin1_monthly.geojson config/vietnam_evaluation_set.json
+vietnam_evaluation_set: vietnam_evaluation_set.json
+laos_evaluation_set: laos_evaluation_set.json
+thailand_evaluation_set: thailand_evaluation_set.json

@@ -31,17 +31,22 @@ Files:
 - `chap_client.py`: thin HTTP client for the chap-core endpoints the benchmarks need
 - `run_benchmarks.py`: `run`, `status` and `results` commands
 - `check_updates_and_trigger_run.py`: cron entry point, runs pending models under a lock
-- `seed_datasets.py`: import the benchmark datasets into chap
+- `seed_datasets.py`: build make-dataset requests from CSV and GeoJSON pairs, and import the benchmark datasets into chap
+
+The standing datasets are the monthly admin-1 Vietnam, Laos and Thailand sets from
+[climate-health-data](https://github.com/dhis2/climate-health-data) at commit
+`af362d5260c6`.
 
 ## Running locally
 
 1. `git clone git@github.com:dhis2-chap/chap_benchmarking.git && cd chap_benchmarking && uv sync`
 2. Have chap-core running (default `http://localhost:8000`). Point elsewhere with `CHAP_URL`; if the instance is token-gated set `CHAP_API_TOKEN`.
 3. `cp -r example_config config` and edit `config/problem_specifications.yaml`.
-4. Seed datasets: `uv run seed_datasets.py seed config/dataset_seeds.yaml`
-5. `uv run run_benchmarks.py status` shows each problem's specification, the models its dataset can run, and which are pending or failed.
-6. `uv run run_benchmarks.py run` runs every pending model. `--problem NAME` limits to one problem, `--force` reruns every model.
-7. `uv run run_benchmarks.py results NAME` prints the backtests under a problem with version, source digest and aggregate metrics.
+4. Build the dataset request files: download each CSV and GeoJSON pair and run `uv run seed_datasets.py convert <csv> <geojson> config/<dataset_name>.json` (see `config/dataset_seeds.yaml`).
+5. Seed datasets: `uv run seed_datasets.py seed config/dataset_seeds.yaml`
+6. `uv run run_benchmarks.py status` shows each problem's specification, the models its dataset can run, and which are pending or failed.
+7. `uv run run_benchmarks.py run` runs every pending model. `--problem NAME` limits to one problem, `--force` reruns every model.
+8. `uv run run_benchmarks.py results NAME` prints the backtests under a problem with version, source digest and aggregate metrics.
 
 ## Server
 
