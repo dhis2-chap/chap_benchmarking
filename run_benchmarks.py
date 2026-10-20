@@ -93,12 +93,12 @@ class BenchmarkRunner:
         raise ValueError(f"Dataset {problem.dataset_name!r} not found in chap. Available: {[d['name'] for d in datasets]}")
 
     def configured_models(self, problem: Problem) -> list[dict]:
-        """Live configured models that the problem's dataset can run, in chap's order."""
+        """Live, not archived configured models that the problem's dataset can run, in chap's order."""
         dataset = self.dataset(problem)
         return [
             model
             for model in self.client.list_configured_models()
-            if model.get("healthStatus") == "live" and dataset_can_run(dataset, model)
+            if model.get("healthStatus") == "live" and not model.get("archived") and dataset_can_run(dataset, model)
         ]
 
     def find_specification(self, problem: Problem) -> dict | None:
