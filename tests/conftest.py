@@ -82,7 +82,9 @@ def dataset():
     }
 
 
-def _model(id, name, covariates=("rainfall", "mean_temperature", "population"), period_type="any", health="live"):
+def _model(
+    id, name, covariates=("rainfall", "mean_temperature", "population"), period_type="any", health="live", archived=False
+):
     return {
         "id": id,
         "name": name,
@@ -90,6 +92,7 @@ def _model(id, name, covariates=("rainfall", "mean_temperature", "population"), 
         "sourceDigest": "abc1234def",
         "supportedPeriodType": period_type,
         "healthStatus": health,
+        "archived": archived,
         "target": {"name": "disease_cases"},
         "covariates": [{"name": c} for c in covariates],
     }
@@ -97,13 +100,14 @@ def _model(id, name, covariates=("rainfall", "mean_temperature", "population"), 
 
 @pytest.fixture
 def configured_models():
-    """Two runnable models, then one per reason a model is left out: not live, weekly only, missing a covariate."""
+    """Two runnable models, then one per reason a model is left out: not live, weekly only, missing a covariate, archived."""
     return [
         _model(3, "naive_model", covariates=()),
         _model(5, "chap_ewars_monthly", covariates=("rainfall", "mean_temperature", "population", "gen:month_of_year")),
         _model(8, "stale_model", health="revision_mismatch"),
         _model(9, "weekly_model", period_type="week"),
         _model(10, "humidity_model", covariates=("rainfall", "humidity")),
+        _model(11, "archived_model", archived=True),
     ]
 
 

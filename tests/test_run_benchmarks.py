@@ -39,7 +39,7 @@ def test_configured_models_are_the_live_models_the_dataset_can_run(runner, probl
 
 
 def test_dataset_can_run_ignores_generated_covariates_and_matches_period_type(dataset, configured_models):
-    ewars, stale, weekly, humidity = configured_models[1:]
+    ewars, stale, weekly, humidity = configured_models[1:5]
     assert dataset_can_run(dataset, ewars)
     assert dataset_can_run(dataset, stale)
     assert not dataset_can_run(dataset, weekly)
