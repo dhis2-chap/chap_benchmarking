@@ -68,10 +68,26 @@ def test_pending_models_holds_back_models_whose_last_job_failed(runner, problem,
         200,
         [{"id": "j1", "name": "rwanda_monthly/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"}],
     )
+    fake_session.routes[("GET", "/jobs/j1/request")] = (200, {"name": "rwanda_monthly", "modelIds": [3, 5]})
     assert runner.pending_models(problem) == []
     assert runner.failed_models(problem) == ["chap_ewars_monthly"]
     assert [r.model for r in runner.run(problem)] == []
     assert [r.model for r in runner.run(problem, force=True)] == ["naive_model", "chap_ewars_monthly"]
+
+
+def test_a_failure_of_an_earlier_version_or_with_an_expired_request_does_not_hold_a_model_back(
+    runner, problem, fake_session
+):
+    fake_session.routes[("GET", "/jobs")] = (
+        200,
+        [
+            {"id": "j1", "name": "rwanda_monthly/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"},
+            {"id": "j2", "name": "rwanda_monthly/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"},
+        ],
+    )
+    fake_session.routes[("GET", "/jobs/j1/request")] = (200, {"name": "rwanda_monthly", "modelIds": [4]})
+    assert [m["name"] for m in runner.pending_models(problem)] == ["chap_ewars_monthly"]
+    assert runner.failed_models(problem) == []
 
 
 def test_pending_models_skips_models_with_a_running_job(runner, problem, fake_session):
@@ -83,6 +99,7 @@ def test_pending_models_skips_models_with_a_running_job(runner, problem, fake_se
             {"id": "j3", "name": "other_problem/chap_ewars_monthly", "status": "FAILURE", "type": "create_backtest"},
         ],
     )
+    fake_session.routes[("GET", "/jobs/j1/request")] = (200, {"name": "rwanda_monthly", "modelIds": [5]})
     assert runner.pending_models(problem) == []
     assert runner.failed_models(problem) == ["chap_ewars_monthly"]
 

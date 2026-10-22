@@ -123,6 +123,13 @@ class ChapClient:
         """Every job chap still tracks, with its name and status."""
         return self._request("GET", "/jobs")
 
+    def job_request(self, job_id: str) -> dict | None:
+        """The request a job was submitted with, or None once chap has dropped it (it keeps them for 7 days)."""
+        try:
+            return self._request("GET", f"/jobs/{job_id}/request")
+        except ChapClientError:
+            return None
+
     def job_status(self, job_id: str) -> str:
         status = self._request("GET", f"/jobs/{job_id}")
         return str(status).strip('"').upper()

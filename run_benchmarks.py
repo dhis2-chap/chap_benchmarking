@@ -117,47 +117,60 @@ class BenchmarkRunner:
         summary = self.find_specification(problem)
         return self.client.get_specification(summary["id"]) if summary else None
 
-    def job_statuses(self, problem: Problem) -> dict[str, set[str]]:
-        """Statuses of the jobs chap still tracks for this problem, keyed by job name (problem/model)."""
-        statuses: dict[str, set[str]] = {}
+    def jobs(self, problem: Problem) -> dict[str, list[dict]]:
+        """The jobs chap still tracks for this problem, keyed by job name (problem/model)."""
+        jobs: dict[str, list[dict]] = {}
         for job in self.client.list_jobs():
             name = job.get("name") or ""
             if name.startswith(f"{problem.name}/") and job.get("status"):
-                statuses.setdefault(name, set()).add(str(job["status"]).upper())
-        return statuses
+                jobs.setdefault(name, []).append(job)
+        return jobs
+
+    def has_failed(self, model: dict, jobs: list[dict]) -> bool:
+        """True if one of the model's jobs failed.
+
+        Every version of a model shares the job name, so a failed job counts only if its
+        request lists this configured model's id: a new version gets its own run. chap
+        keeps requests for 7 days, so after that a failed model is retried once.
+        """
+        return any(
+            str(job["status"]).upper() in FAILED_STATUSES
+            and model["id"] in (self.client.job_request(job["id"]) or {}).get("modelIds", [])
+            for job in jobs
+        )
 
     def pending_models(self, problem: Problem) -> list[dict]:
         """Configured models of the problem with no backtest under its specification.
 
-        Models whose job is still running are left alone, and models whose last job
-        failed are held back until rerun with force, so a model that cannot run is not
+        Models whose job is still running are left alone, and models whose job failed
+        are held back until rerun with force, so a model that cannot run is not
         resubmitted on every tick.
         """
         specification = self.results(problem)
         done = {backtest["configuredModel"]["id"] for backtest in specification["backtests"]} if specification else set()
-        statuses = self.job_statuses(problem)
+        jobs = self.jobs(problem)
         pending = []
         for model in self.configured_models(problem):
             if model["id"] in done:
                 continue
-            job_status = statuses.get(f"{problem.name}/{model['name']}", set())
-            if job_status & RUNNING_STATUSES:
+            model_jobs = jobs.get(f"{problem.name}/{model['name']}", [])
+            if any(str(job["status"]).upper() in RUNNING_STATUSES for job in model_jobs):
                 logger.info("Problem %s: %s is still running, skipping", problem.name, model["name"])
-            elif job_status & FAILED_STATUSES:
+            elif self.has_failed(model, model_jobs):
                 logger.warning("Problem %s: %s failed last time, rerun with --force", problem.name, model["name"])
             else:
                 pending.append(model)
         return pending
 
     def failed_models(self, problem: Problem) -> list[str]:
-        """Names of the problem's models whose last job failed and that have no backtest."""
+        """Names of the problem's models whose job failed and that have no backtest."""
         specification = self.results(problem)
-        done = {backtest["configuredModel"]["name"] for backtest in specification["backtests"]} if specification else set()
-        statuses = self.job_statuses(problem)
+        done = {backtest["configuredModel"]["id"] for backtest in specification["backtests"]} if specification else set()
+        jobs = self.jobs(problem)
         return [
             model["name"]
             for model in self.configured_models(problem)
-            if model["name"] not in done and statuses.get(f"{problem.name}/{model['name']}", set()) & FAILED_STATUSES
+            if model["id"] not in done and self.has_failed(model, jobs.get(f"{problem.name}/{model['name']}", []))
         ]
 
     def run(self, problem: Problem, force: bool = False) -> list[RunResult]:
