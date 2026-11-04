@@ -56,7 +56,13 @@ The benchmarking server (`chap-benchmarking.dhis2.org`, runbook in the private
 the live configuration in `config/` and `CHAP_URL` / `CHAP_API_TOKEN` in `.env`,
 both untracked. `deploy.sh` runs on push to main (see
 `.github/workflows/deploy.yml`) and installs a cron job that runs
-`check_updates_and_trigger_run.py` every 15 minutes. A separate cron job on the
+`check_updates_and_trigger_run.py` every 15 minutes. When a run stores new
+backtests, that script sends a `benchmarks-updated` repository_dispatch to the
+model marketplace, whose deploy workflow then reads the results and republishes
+the leaderboard. It needs `MARKETPLACE_DISPATCH_TOKEN` in `.env`: a fine-grained
+GitHub token for `dhis2-chap/chap-marketplace` only, with Contents read and
+write. Without it the run works as before and the marketplace catches up on its
+own schedule. A separate cron job on the
 host runs `chap-admin install-all` and `update-all` against the server's chap, so
 new marketplace models and versions are picked up by the next run.
 
